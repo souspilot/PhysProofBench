@@ -48,16 +48,39 @@ uniform distribution maximizes Shannon entropy) compiles publicly with
 `{propext, Classical.choice, Quot.sound}`; the `physproofbench` CLI installs
 and `physproofbench grade` runs L0–L2 against a hand-written correct
 submission and three cheating submissions (`sorry`, `native_decide`, a
-tampered statement), classifying all four correctly; `pytest` is green (32
-tests, including real Lean compilation, not mocks).
+tampered statement), classifying all four correctly; `pytest` is green (40
+tests as of the latest change below, including real Lean compilation, not
+mocks).
 
-Not yet built: M1's ingestion/run/report/judge/model-adapter machinery
-(`src/physproofbench/{ingest,judge,models}/` are empty directories reserving
-the layout from `plan.md` §3; `run.py` and `report.py` don't exist yet).
-L2.3 statement-preservation checking is implemented (`lean/audit.py`) and
-tested end-to-end, but not yet wired automatically into `grading.py` (see
-its docstring). No chapter has been censused. See `plan.md` for the full
-milestone list and `docs/DECISIONS.md` for choices made so far.
+Since then, a minimal single-item M1 slice: `physproofbench run --item <id>
+--model <name> [--condition no_nl_proof|with_nl_proof]` renders the A1/A2
+prompt (`render.py`), calls an OpenAI-compatible endpoint (`models/
+openai_client.py` — reads `OPENAI_API_KEY`/`OPENAI_BASE_URL`, so it works
+against a local vLLM server), extracts the last fenced ` ```lean ` block
+(`extract.py`), and grades it (L0–L2), writing prompt/completion/candidate/
+grade JSON under `runs/`. Not the full `plan.md` §8 runner — one item, one
+sample, no pass@k, no caching/parallelism, no multi-item summary table.
+
+While building and testing `run` end to end (not just unit tests) against a
+real local server, found and fixed a real bug in `lean/sandbox.py`:
+`lake env lean <file>` re-runs Lake's own dependency-freshness check on
+every invocation, and when that check's network access fails (as it always
+does under this module's `no_network=True` macOS sandboxing), Lake doesn't
+fail gracefully — it deletes and tries to re-clone the entire Mathlib
+checkout. Fixed by resolving the Lake environment once (`resolve_lake_env`)
+and invoking the raw `lean` binary directly for every compile after that,
+which needs no network at all. Also closed `subprocess.run`'s `stdin`
+(`DEVNULL`) — left open, it caused `lake env lean` to hang when invoked from
+Python (as opposed to an interactive shell) at all, sandboxed or not.
+
+Not yet built: M1's ingestion/report/judge machinery
+(`src/physproofbench/{ingest,judge}/` are empty directories reserving the
+layout from `plan.md` §3; `report.py` doesn't exist; only A1/A2 proof-mode
+prompts are implemented, not B1/B2 autoform). L2.3 statement-preservation
+checking is implemented (`lean/audit.py`) and tested end-to-end, but not yet
+wired automatically into `grading.py` (see its docstring). No chapter has
+been censused. See `plan.md` for the full milestone list and
+`docs/DECISIONS.md` for choices made so far.
 
 ## License
 

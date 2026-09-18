@@ -42,6 +42,17 @@ see `docs/SOURCE.md` / `lean/lakefile.toml`), in a sandbox with:
 
 Record: exit status, stderr, elapsed time, and the full diagnostic list.
 
+Implementation note: the submission is compiled with the raw `lean` binary,
+not `lake env lean <file>`. The Lake environment (`LEAN_PATH` and friends) is
+resolved once per workspace via a bare `lake env` (`sandbox.resolve_lake_env`)
+and cached; each individual compile then invokes `lean` directly with that
+environment. This isn't just an optimization — `lake env lean <file>`
+re-runs Lake's own dependency-freshness check on every call, and when that
+check's network access fails (as it does under this sandbox's
+`no_network=True`), Lake responds by deleting and attempting to re-clone the
+entire Mathlib checkout rather than failing gracefully. Found by testing the
+grading pipeline against a real model endpoint, not merely unit-tested.
+
 ## L2. Audits (`audit.py`)
 
 For the submitted declaration `D`:

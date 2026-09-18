@@ -22,4 +22,7 @@ runs/*/
 
 book/main.txt
 
+# Local harness state (scheduled-wakeup lock etc.), not project content
+.claude/
+
 .DS_Store
