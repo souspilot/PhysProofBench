@@ -1,7 +1,8 @@
 """L1 kernel check: compile a submission against the pinned Mathlib build.
 
-See docs/GRADING.md#l1-kernel-check-sandboxpy. Runs `lake env lean <file>`
-with a wall-clock timeout and (best-effort) no network access.
+See docs/GRADING.md#l1-kernel-check-sandboxpy. Runs the raw `lean` binary
+(not `lake env lean`) with a wall-clock timeout and (best-effort) no network
+access -- see `resolve_lake_env`'s docstring for why not `lake env lean`.
 
 Network sandboxing is currently implemented for macOS only, via
 `sandbox-exec`. On other platforms `compile_file` still enforces the
@@ -12,7 +13,10 @@ CI on Linux; use a container or `firejail`/`bwrap` there instead.
 
 from __future__ import annotations
 
+import functools
+import os
 import platform
+import re
 import resource
 import shutil
 import subprocess
@@ -41,6 +45,54 @@ def find_lake() -> str:
         "lake not found on PATH or in ~/.elan/bin -- install elan "
         "(https://github.com/leanprover/elan) first"
     )
+
+
+_ENV_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+
+
+@functools.lru_cache(maxsize=8)
+def _resolve_lake_env_cached(lean_project_dir_str: str) -> tuple[tuple[str, str], ...]:
+    proc = subprocess.run(
+        [find_lake(), "env"],
+        cwd=lean_project_dir_str,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        stdin=subprocess.DEVNULL,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"`lake env` failed to resolve the workspace at {lean_project_dir_str}:\n"
+            f"{proc.stderr}"
+        )
+    env: dict[str, str] = {}
+    for line in proc.stdout.splitlines():
+        match = _ENV_LINE.match(line)
+        if match:
+            env[match.group(1)] = match.group(2)
+    return tuple(sorted(env.items()))
+
+
+def resolve_lake_env(lean_project_dir: Path) -> dict[str, str]:
+    """Resolve `lean_project_dir`'s Lake environment (LEAN_PATH, the LEAN
+    binary path, DYLD/LD_LIBRARY_PATH, etc.) via a bare `lake env`, and
+    cache it per directory for the life of this process.
+
+    Deliberately *not* used to run `lake env lean <file>` per compile.
+    Found in practice: `lake env lean <file>` re-runs Lake's own
+    dependency-freshness check on every invocation, and when that check's
+    network access fails (as it does under this module's own
+    `no_network=True` sandboxing, and once even in an unsandboxed subprocess
+    — see `compile_file`'s stdin note below) Lake doesn't fail gracefully:
+    it reports "mathlib: URL has changed" and attempts to delete and
+    re-clone the entire Mathlib checkout. Resolving the environment once,
+    then invoking the plain `lean` binary directly for every subsequent
+    compile, sidesteps that check entirely -- `lean` itself does no
+    dependency management and touches no network. This is also just faster:
+    no repeated Lakefile elaboration per grading call.
+    """
+    return dict(_resolve_lake_env_cached(str(lean_project_dir)))
+
 
 _SANDBOX_PROFILE = """
 (version 1)
@@ -83,13 +135,11 @@ def _memory_cap_preexec(memory_cap_bytes: int):
 
 
 def _build_command(
-    lean_project_dir: Path, file_path: Path, *, no_network: bool
+    lean_bin: str, file_path: Path, *, lean_project_dir: Path, no_network: bool
 ) -> list[str]:
-    base = [find_lake(), "env", "lean", str(file_path)]
+    base = [lean_bin, str(file_path)]
     if no_network and platform.system() == "Darwin":
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".sb", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sb", delete=False) as f:
             f.write(_SANDBOX_PROFILE)
             profile_path = f.name
         return [
@@ -111,21 +161,37 @@ def compile_file(
     memory_cap_bytes: int = DEFAULT_MEMORY_CAP_BYTES,
     no_network: bool = True,
 ) -> CompileResult:
-    """Compile `file_path` with `lake env lean`, in `lean_project_dir`.
+    """Compile `file_path` against `lean_project_dir`'s resolved environment.
 
     `file_path` need not live inside `lean_project_dir`, but the module it
     declares must resolve against that project's dependencies (Mathlib etc.)
-    for imports to succeed.
+    for imports to succeed. See `resolve_lake_env` for why this runs the raw
+    `lean` binary rather than `lake env lean`/`lake lean`.
+
+    `stdin` is deliberately closed below (`DEVNULL`). Without it, `lean`
+    invoked via `subprocess` (as opposed to an interactive shell) was
+    observed to hang reading stdin.
     """
-    command = _build_command(lean_project_dir, file_path, no_network=no_network)
+    env_vars = resolve_lake_env(lean_project_dir)
+    lean_bin = env_vars.get("LEAN")
+    if not lean_bin:
+        raise RuntimeError(
+            f"`lake env` at {lean_project_dir} did not report a LEAN binary path"
+        )
+    command = _build_command(
+        lean_bin, file_path, lean_project_dir=lean_project_dir, no_network=no_network
+    )
+    child_env = {**os.environ, **env_vars}
     start = time.monotonic()
     try:
         proc = subprocess.run(
             command,
             cwd=lean_project_dir,
+            env=child_env,
             capture_output=True,
             text=True,
             timeout=timeout,
+            stdin=subprocess.DEVNULL,
             preexec_fn=_memory_cap_preexec(memory_cap_bytes),
         )
     except subprocess.TimeoutExpired as exc:
