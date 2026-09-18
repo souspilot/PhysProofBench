@@ -1,0 +1,36 @@
+name: CI
+
+# Public-repo CI. Must pass without the private physproofbench-solutions
+# submodule checked out (plan.md §3) -- this workflow never checks it out
+# and never builds the PhysProofBenchSolutions Lake target.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: lean
+          build-args: "PhysProofBench"
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      # Lean-dependent tests (test_grading.py, test_statement_preservation.py)
+      # skip themselves gracefully if `lake` isn't found (see
+      # tests/conftest.py) -- this job doesn't install a Lean toolchain, so
+      # those run only in the `lean` job's context today. TODO once the two
+      # jobs need to share a toolchain: merge into one job with lean-action
+      # installed, or install elan here too.
+      - run: pytest tests/ -v

@@ -1,0 +1,19 @@
+name = "PhysProofBench"
+defaultTargets = ["PhysProofBench"]
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "v4.34.0"
+
+[[lean_lib]]
+name = "PhysProofBench"
+globs = ["PhysProofBench.+"]
+
+# Private reference proofs, mounted here as the `physproofbench-solutions`
+# git submodule (see docs/DECISIONS.md). Not present -- and this target not
+# built -- in a public-only checkout; `lake build PhysProofBench` (the
+# public CI target) never touches it.
+[[lean_lib]]
+name = "PhysProofBenchSolutions"
+globs = ["PhysProofBenchSolutions.+"]

@@ -1,0 +1,26 @@
+[project]
+name = "physproofbench"
+version = "0.1.0"
+description = "A Lean 4 physics formalization benchmark"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "click>=8.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+physproofbench = "physproofbench.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

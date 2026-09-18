@@ -1,0 +1,30 @@
+id: SM_01_009_001
+schema_version: 1
+status: draft
+source:
+  book: SM
+  chapter: 1
+  item_label: "Lemma 1.9"
+  pages: [21]
+topic: [statistical-mechanics, entropy, information-theory]
+
+proof_kind: exact
+hidden_assumptions: []
+
+lean_file: lean/PhysProofBench/Items/SM_01_009_001.lean
+decl_name: shannonEntropy_le_log_card
+solution_file: lean/PhysProofBenchSolutions/SM_01_009_001.lean
+imports_physlib: false
+modes: [proof, autoform]
+nl:
+  statement: nl.md#statement
+  proof: nl.md#proof
+
+difficulty:
+  decl_count: 9
+  band: moderate
+depends_on: []
+core_deps: [PhysProofBench.Core.Probability]
+library_gaps: []
+contributed_by: "harshitbiitk@gmail.com"
+reviewed_by: []

@@ -1,0 +1,25 @@
+# Lean build artifacts
+lean/.lake/
+lean/lakefile.olean
+
+# Private solutions submodule mount point -- content lives in the separate
+# physproofbench-solutions repo (see docs/DECISIONS.md). Locally this may be
+# populated as a build convenience; it must never be committed here.
+lean/PhysProofBenchSolutions/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Generated
+runs/*/
+!runs/.gitkeep
+
+book/main.txt
+
+.DS_Store

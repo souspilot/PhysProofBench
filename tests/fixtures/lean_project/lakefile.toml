@@ -1,0 +1,6 @@
+name = "GraderFixtures"
+defaultTargets = ["GraderFixtures"]
+
+[[lean_lib]]
+name = "GraderFixtures"
+globs = ["GraderFixtures.+"]
