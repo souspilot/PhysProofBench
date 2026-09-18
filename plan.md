@@ -2,7 +2,9 @@
 
 *Implementation spec, written to be handed to Claude Code as the top-level brief. Everything below is a requirement or a decision to be made explicitly; where a Lean or Mathlib API detail is uncertain it is marked **VERIFY** and must be checked against the pinned toolchain before being relied on.*
 
-Working name used throughout: **PhysForm**. Rename freely, but do it once, at the start, and keep the name consistent across the package, the CLI, and the Lean library.
+> **Editor's note (M0, post-implementation).** This file is the original brief; it's been lightly edited in place — renamed throughout, book and seed item swapped for the ones actually decided on, §10/§12 annotated with status — rather than kept frozen, since the maintainer asked for it to track real decisions. For day-to-day current state, prefer `README.md` and `docs/` (`SOURCE.md`, `DECISIONS.md`, `GRADING.md`, `TAXONOMY.md`, `PROMPTS.md`), which are the living docs and move faster than this file. M0 (§10) is complete as of this edit.
+
+Name used throughout: **PhysProofBench** (renamed from this doc's original working name `PhysForm` to match the project directory — see `docs/DECISIONS.md`), consistent across the package, the CLI, and the Lean library.
 
 ---
 
@@ -36,7 +38,9 @@ Read these before designing anything; they encode hard-won lessons.
 
 ## 2. Source text and the first book
 
-The seed item (§9) is Theorem 2.2.1, characterization of rigid motions, from a continuum mechanics textbook. **Decision required from the maintainer before M2: which book is the census target.** Continuum mechanics is a good choice — it is mathematically precise, mostly finite-dimensional tensor analysis, and full of category-3 modeling assumptions — but the choice must be recorded in `docs/SOURCE.md` with edition and ISBN.
+**Decided (M0):** the census book is Friedli & Velenik, *Statistical Mechanics: A Mathematical Introduction* ("SM" — "Revised version, August 22 2017" draft, `book/main.pdf`), not the continuum-mechanics text this section originally proposed. The book actually present in the repository is SM; the maintainer confirmed it as the target rather than switching to a continuum-mechanics text to match this section's original example. Full citation, edition caveats, and the coverage ledger live in `docs/SOURCE.md`; the reasoning and the resulting seed-item swap (§9) are recorded in `docs/DECISIONS.md`.
+
+*(Original text, for context: "The seed item (§9) is Theorem 2.2.1, characterization of rigid motions, from a continuum mechanics textbook... Continuum mechanics is a good choice — it is mathematically precise, mostly finite-dimensional tensor analysis, and full of category-3 modeling assumptions." SM turned out to fit the same requirements — rigorous, proof-first, self-contained early chapters — without requiring a book swap from what was already in the repo.)*
 
 ### 2.1 Copyright rules (non-negotiable)
 
@@ -52,7 +56,7 @@ The repository must never contain scanned pages, OCR dumps, or verbatim textbook
 ## 3. Repository layout
 
 ```
-physform/
+physproofbench/
 ├── README.md
 ├── CONTRIBUTING.md
 ├── docs/
@@ -63,22 +67,23 @@ physform/
 ├── lean/
 │   ├── lakefile.toml          # or lakefile.lean; pin Mathlib + optional Physlib
 │   ├── lean-toolchain         # pinned toolchain, e.g. leanprover/lean4:v4.x.y
-│   ├── PhysForm/
+│   ├── PhysProofBench/
 │   │   ├── Core/              # shared defs used by many items
-│   │   │   ├── Units.lean     # dimensions/units layer (see §5.3)
-│   │   │   ├── Kinematics.lean
-│   │   │   └── Tensors.lean
+│   │   │   ├── Probability.lean  # M0: IsProbDist, shannonEntropy, uniformDist (SM ch.1)
+│   │   │   ├── Units.lean     # dimensions/units layer (see §5.3) -- not yet needed, see docs/DECISIONS.md
+│   │   │   ├── Kinematics.lean   # continuum-mechanics example from this doc's original draft; not built
+│   │   │   └── Tensors.lean      # ditto -- neither applies to SM's early chapters
 │   │   └── Items/             # PUBLIC: one file per item, statement + `sorry`
-│   │       └── CM_02_002_001.lean
-│   └── PhysFormSolutions/     # PRIVATE (separate repo, git submodule): proofs
-│       └── CM_02_002_001.lean
+│   │       └── SM_01_009_001.lean  # M0 seed item (Friedli-Velenik Lemma 1.9)
+│   └── PhysProofBenchSolutions/     # PRIVATE (separate repo, git submodule): proofs
+│       └── SM_01_009_001.lean
 ├── items/
-│   └── CM_02_002_001/
+│   └── SM_01_009_001/
 │       ├── meta.yaml          # schema in §4
 │       ├── nl.md              # paraphrased statement + proof
 │       └── notes.md           # formalization decisions, hypotheses added, gaps
-├── src/physform/              # Python package
-│   ├── cli.py                 # `physform` entry point
+├── src/physproofbench/              # Python package
+│   ├── cli.py                 # `physproofbench` entry point
 │   ├── schema.py              # pydantic models for meta.yaml + submissions
 │   ├── render.py              # item + condition -> prompt
 │   ├── models/                # LLM adapters (anthropic, openai, local/vllm)
@@ -97,13 +102,13 @@ physform/
 └── .github/workflows/ci.yml
 ```
 
-Two repositories, not one: `physform` (public, statements with `sorry`) and `physform-solutions` (private, reference proofs), the latter included as a submodule for maintainers. CI in the public repo must pass without the submodule.
+Two repositories, not one: `physproofbench` (public, statements with `sorry`) and `physproofbench-solutions` (private, reference proofs), the latter included as a submodule for maintainers. CI in the public repo must pass without the submodule.
 
 ---
 
 ## 4. Item schema
 
-`items/<id>/meta.yaml`, validated by `physform.schema`:
+`items/<id>/meta.yaml`, validated by `physproofbench.schema`. Example below is the original illustrative `CM` (continuum-mechanics) draft, kept as-is since the schema shape didn't change; for a real, implemented example see `items/SM_01_009_001/meta.yaml`. One id-convention wrinkle found in practice: `<BOOK>_<CHAPTER>_<SECTION>_<SEQ>` below assumes numbering is per-section, which holds for `CM` but not for `SM` (Friedli–Velenik numbers definitions/lemmas/theorems consecutively per *chapter*) — see `docs/SOURCE.md`'s per-book id-convention subsection for how `SM` adapts it.
 
 ```yaml
 id: CM_02_002_001            # <BOOK>_<CHAPTER>_<SECTION>_<SEQ>, stable forever
@@ -134,9 +139,9 @@ hidden_assumptions:          # assumptions the source does not state; see §5.2
     note: "The source's short route assumes χ twice differentiable in X."
 
 # --- task wiring ---
-lean_file: lean/PhysForm/Items/CM_02_002_001.lean
+lean_file: lean/PhysProofBench/Items/CM_02_002_001.lean
 decl_name: rigid_motion_tfae
-solution_file: lean/PhysFormSolutions/CM_02_002_001.lean
+solution_file: lean/PhysProofBenchSolutions/CM_02_002_001.lean
 imports_physlib: false
 modes: [proof, autoform]       # some items may be proof-only
 nl:
@@ -148,7 +153,7 @@ difficulty:
   decl_count: 37               # declarations the reference proof needs beyond Core
   band: large                  # very_small|small|moderate|large|very_large, from decl_count
 depends_on: [CM_02_001_004]    # other item ids used by the reference proof
-core_deps: [PhysForm.Core.Kinematics]
+core_deps: [PhysProofBench.Core.Kinematics]
 library_gaps: ["arc length of a curve in EuclideanSpace: partial Mathlib support"]
 contributed_by: "..."
 reviewed_by: ["...", "..."]    # require >= 2 distinct reviewers before `active`
@@ -166,29 +171,31 @@ Rules the schema must enforce:
 
 ### 5.1 Project and pinning
 
-- `lean-toolchain` and `lakefile` pin exact Mathlib and (optionally) Physlib commits. Record them in `docs/SOURCE.md` and in every run's metadata; results are only comparable within a pin.
-- Provide `physform lean build` to build once and cache `.olean`s; every item compile reuses that build. Cold builds of Mathlib are slow, so CI must cache `lean/.lake`.
-- **VERIFY** early whether depending on Physlib forces a Mathlib version conflict. If it does, make Physlib an opt-in second build configuration and set `imports_physlib: false` for all seed items.
+- `lean-toolchain` and `lakefile` pin exact Mathlib and (optionally) Physlib commits. Record them in `docs/SOURCE.md` and in every run's metadata; results are only comparable within a pin. **Done (M0):** `lean/lean-toolchain` = `leanprover/lean4:v4.34.0`, `lean/lakefile.toml` pins Mathlib tag `v4.34.0` (commit `5ed2965...`, full hash in `docs/SOURCE.md`); `imports_physlib: false` for the seed item.
+- Provide `physproofbench lean build` to build once and cache `.olean`s; every item compile reuses that build. Cold builds of Mathlib are slow, so CI must cache `lean/.lake`. Not yet built as a CLI subcommand — for now, `lake build PhysProofBench` from `lean/` does this directly, and `lake exe cache get` fetches precompiled Mathlib oleans instead of building from source (used for M0; cut the seed item's build from hours to ~90s).
+- **VERIFY** early whether depending on Physlib forces a Mathlib version conflict. Still open — not exercised in M0, since SM's early chapters don't need Physlib.
 
-### 5.2 `PhysForm.Core`
+### 5.2 `PhysProofBench.Core`
 
 A small shared library so items do not each redefine the wheel. It must stay small and reviewed; a bug here contaminates many items (AxQM's defence is exactly this reuse argument, so track it: a script should report, for each item, the fraction of its dependency closure shared with other items).
 
-Contents to start:
+Contents to start (original draft, written against the continuum-mechanics placeholder book):
 
-- `Core/Tensors.lean` — conventions for second-order tensors as `E3 →ₗ[ℝ] E3` or `Matrix (Fin 3) (Fin 3) ℝ`. **Pick one and document it**; mixing the two is the main source of pain. Provide the bridge lemmas.
-- `Core/Kinematics.lean` — `IsRotation`, deformation gradient, right Cauchy–Green, Green–Lagrange strain, `IsRigidMotion`.
-- `Core/Units.lean` — dimension-tracked quantities. Options: reuse Lean4PHYS's unit system, reuse Tao's `UnitSystem`, or write a minimal one. **VERIFY** licence compatibility (Lean4PHYS's library is Apache-2.0 but its dataset carries a restrictive licence — do not vendor the dataset).
-- `Core/Approx.lean` — the piece no existing library has: idiomatic wrappers for stating approximations. At minimum, notation and lemmas for "f agrees with g to first order at 0" built on `Asymptotics.IsLittleO`, and a `HasErrorBound` predicate for explicit-bound statements. This is what makes `proof_kind: approximation` items expressible.
+- `Core/Tensors.lean` — conventions for second-order tensors as `E3 →ₗ[ℝ] E3` or `Matrix (Fin 3) (Fin 3) ℝ`. **Pick one and document it**; mixing the two is the main source of pain. Provide the bridge lemmas. *Not built — SM doesn't need tensors this early; revisit if a later chapter does.*
+- `Core/Kinematics.lean` — `IsRotation`, deformation gradient, right Cauchy–Green, Green–Lagrange strain, `IsRigidMotion`. *Not built, same reason.*
+- `Core/Units.lean` — dimension-tracked quantities. Options: reuse Lean4PHYS's unit system, reuse Tao's `UnitSystem`, or write a minimal one. **VERIFY** licence compatibility (Lean4PHYS's library is Apache-2.0 but its dataset carries a restrictive licence — do not vendor the dataset). *Not built — SM's early chapters are dimensionless; see `docs/DECISIONS.md` item 3.*
+- `Core/Approx.lean` — the piece no existing library has: idiomatic wrappers for stating approximations. At minimum, notation and lemmas for "f agrees with g to first order at 0" built on `Asymptotics.IsLittleO`, and a `HasErrorBound` predicate for explicit-bound statements. This is what makes `proof_kind: approximation` items expressible. *Not built — no `approximation` item exists yet.*
+
+**Built instead (M0), for `SM`:** `Core/Probability.lean` — `IsProbDist`, `uniformDist`, `shannonEntropy` for finite probability spaces (Friedli–Velenik §1.2), plus the bridge lemma to Mathlib's `Real.negMulLog`. This is the actual first `Core` file; the four above are this section's original example for a different book and haven't been started.
 
 ### 5.3 Item file conventions
 
-Public item file (`lean/PhysForm/Items/<id>.lean`):
+Public item file (`lean/PhysProofBench/Items/<id>.lean`) — original example below (continuum-mechanics placeholder); see `lean/PhysProofBench/Items/SM_01_009_001.lean` for the real, implemented one:
 
 ```lean
-import PhysForm.Core.Kinematics
--- PHYSFORM-ITEM: CM_02_002_001
--- PHYSFORM-DECL: rigid_motion_tfae
+import PhysProofBench.Core.Kinematics
+-- PHYSPROOFBENCH-ITEM: CM_02_002_001
+-- PHYSPROOFBENCH-DECL: rigid_motion_tfae
 
 /-- <docstring: the informal statement, paraphrased> -/
 theorem rigid_motion_tfae
@@ -207,7 +214,9 @@ Requirements:
 
 ## 6. Grading
 
-`docs/GRADING.md` is the contract; the code in `src/physform/lean/` implements it. Grading is layered. Layers L0–L2 are deterministic and apply to both modes; L3–L4 apply to autoformalization mode only.
+`docs/GRADING.md` is the contract; the code in `src/physproofbench/lean/` implements it. Grading is layered. Layers L0–L2 are deterministic and apply to both modes; L3–L4 apply to autoformalization mode only.
+
+**Status (M0): L0–L2 implemented (`src/physproofbench/lean/{gates,sandbox,audit}.py`) and tested end-to-end against real Lean compilation. `docs/GRADING.md` is now the authoritative, up-to-date contract — this section is kept for historical context; where the two disagree, `docs/GRADING.md` wins.**
 
 ### L0. Syntactic gates (`gates.py`)
 
@@ -216,7 +225,7 @@ Reject before compiling if the submission contains any of:
 - `sorry`, `admit`, `stop`
 - an `axiom` declaration
 - `native_decide`, `implemented_by`, `unsafe`, `extern`
-- `set_option maxHeartbeats 0` beyond a configured cap, or `set_option` that disables checks (**VERIFY** the current list; at minimum flag `debug.skipKernelTC`)
+- `set_option maxHeartbeats 0` beyond a configured cap, or `set_option` that disables checks (**VERIFY** the current list; at minimum flag `debug.skipKernelTC`) — implemented for `debug.skipKernelTC` and a `maxHeartbeats` cap; the rest of "current list" is still open, expand if a submission is found gaming something not on this list.
 - in `proof` mode: any edit to the statement region, detected by diffing the submission against the item file up to the `:= by` marker, *and* independently by the L2 implication check (belt and braces — text diffs are easy to defeat).
 
 Each gate failure is recorded with its reason; gates are reported separately from compile failures so you can distinguish cheating from incapacity.
@@ -226,22 +235,22 @@ Each gate failure is recorded with its reason; gates are reported separately fro
 Compile the submission against the pinned build, in a sandbox with:
 
 - wall-clock timeout (default 300 s, per-item overridable in `meta.yaml`)
-- memory cap
-- **no network access** (models occasionally emit `import`s of nonexistent packages or shell-outs)
+- memory cap — **VERIFY note:** `RLIMIT_AS` reliably fails to set on macOS (`setrlimit` raises "current limit exceeds maximum limit" even though `getrlimit` reports both limits as unlimited — a longstanding Darwin quirk). Enforced on Linux only for now; rely on the timeout on macOS. Should work as intended in Linux CI — re-verify there.
+- **no network access** (models occasionally emit `import`s of nonexistent packages or shell-outs) — implemented via `sandbox-exec` on macOS only; **still a real gap on Linux**, where CI should use a container or `firejail`/`bwrap` instead (not yet built).
 
-Record: exit status, stderr, elapsed time, and the full diagnostic list. Prefer `lake env lean --json <file>` for machine-readable diagnostics (**VERIFY** the flag on the pinned toolchain); fall back to parsing text. For fine-grained work later, the `leanprover-community/repl` driver in `repl.py` allows per-tactic inspection, but the headline metric must come from a plain whole-file compile.
+Record: exit status, stderr, elapsed time, and the full diagnostic list. Uses plain `lake env lean <file>` with text-output parsing rather than `--json` (not evaluated either way yet — text parsing was sufficient for M0's needs); the `repl.py` per-tactic driver isn't built.
 
 ### L2. Audits (`audit.py`)
 
 For the submitted declaration `D`:
 
-1. **`sorry` closure.** `D` and everything it depends on must be `sorry`-free. Implement via `#print axioms D` and check that `sorryAx` does not appear (**VERIFY** the exact axiom name on the pinned version).
+1. **`sorry` closure.** `D` and everything it depends on must be `sorry`-free. Implement via `#print axioms D` and check that `sorryAx` does not appear (**VERIFY** the exact axiom name on the pinned version) — **confirmed**: on Lean `v4.34.0`, `sorryAx` is indeed the name, and the printed message format is `'<decl>' depends on axioms: [propext, Classical.choice, Quot.sound]` (or `'<decl>' does not depend on any axioms`) — verified live against the seed item's real solution, not just assumed. See `items/SM_01_009_001/notes.md`.
 2. **Axiom audit.** The axiom set must be a subset of `{propext, Classical.choice, Quot.sound}`. Anything else fails.
-3. **Environment diff.** Auxiliary lemmas are allowed, but each must itself pass audits 1 and 2. Implement by importing the submission from a checker file and walking the environment (**VERIFY** the right API; a simpler route is to require `#print axioms` on the main declaration only, which transitively covers dependencies — confirm this is true and then prefer it).
-4. **Statement preservation (proof mode).** Generate a checker file:
+3. ~~**Environment diff.**~~ **Resolved, per this section's own suggestion:** checking `#print axioms` on the top-level declaration alone is sufficient and transitively covers dependencies — confirmed against the seed item's real (non-trivial) proof, which pulls in several `have`s and Mathlib lemmas and still reports exactly the standard three axioms at the top level. No separate environment-walk audit was built; audits 1 and 2 above are implemented as one `audit_axioms` function.
+4. **Statement preservation (proof mode).** Generate a checker file. **One real bug found and fixed here:** Lean 4 does **not** auto-namespace a declaration by its file/module path — a top-level `theorem foo` in `Submission.lean` is accessible after `import Submission` as bare `foo`, not `Submission.foo`, so the naive version of this checker (below, as originally drafted) does not typecheck. Fixed by having the harness wrap the submission's source in `namespace Submission ... end Submission` (`audit.namespace_wrap`) before building it — a build-time transformation, never something the model writes itself — and by dropping the gold import entirely (only the gold's *type* is needed, spliced as text; importing it too would put a second identically-named top-level declaration in scope). See `docs/GRADING.md`'s L2.3 section and `tests/test_statement_preservation.py` for the corrected, compile-tested version. Original (buggy) sketch, kept for the historical record of what was wrong with it:
 
    ```lean
-   import PhysForm.Items.CM_02_002_001   -- gold statement, `sorry`-free not required
+   import PhysProofBench.Items.CM_02_002_001   -- gold statement, `sorry`-free not required
    import Submission
    example : <gold type, spliced textually from the item file> := Submission.rigid_motion_tfae
    ```
@@ -249,6 +258,8 @@ For the submitted declaration `D`:
    If this typechecks, the submission proves at least the gold statement. This defeats statement tampering regardless of textual tricks.
 
 A run passes L2 iff all applicable audits pass. **Headline metric for `proof` mode = fraction of items passing L0+L1+L2, at pass@k.**
+
+Note: L2.3 (statement preservation) is implemented and independently tested (`tests/test_statement_preservation.py`), but as of M0 it is not yet wired into the automatic `grade_submission` orchestration in `grading.py` — it needs the ingestion/run machinery (M1) to manage placing gold and submission as properly-named Lean modules. Call `audit.build_statement_preservation_source` / `audit.namespace_wrap` directly until then.
 
 ### L3. Statement equivalence (autoformalization mode) (`bridge.py`)
 
@@ -292,7 +303,7 @@ Requirements on the judging code:
 
 - Two independent judges from different model families; report inter-judge agreement (Cohen's κ or the φ coefficient) in every run. FormalScience found some conclusions to be judge-dependent; if agreement is low, the number is not reportable.
 - Judges see: the paraphrased NL statement, the candidate Lean, the gold Lean, and the L3 verdict. Prompts frozen in `docs/PROMPTS.md` and versioned; changing a judge prompt bumps `grading_version` and invalidates cross-run comparisons.
-- A human adjudication queue: `physform judge review --run <id> --disagreements` opens the cases where judges disagree, writes decisions to `runs/<id>/adjudication.jsonl`, and those decisions become regression fixtures in `tests/`.
+- A human adjudication queue: `physproofbench judge review --run <id> --disagreements` opens the cases where judges disagree, writes decisions to `runs/<id>/adjudication.jsonl`, and those decisions become regression fixtures in `tests/`.
 
 ### Reported metrics
 
@@ -303,7 +314,7 @@ Per run, per condition (A1/A2/B1/B2), overall and sliced by `proof_kind`, `diffi
 - autoformalization only: L3 verdict distribution, FV/FQ/LP/MC, drift-label frequencies
 - cost: tokens and wall-clock per item
 
-Two ablations worth building in from the start, since both are known to move results: **library-in-context on/off** (put `PhysForm.Core` source in the prompt or not), and **NL proof on/off** (the condition axis itself).
+Two ablations worth building in from the start, since both are known to move results: **library-in-context on/off** (put `PhysProofBench.Core` source in the prompt or not), and **NL proof on/off** (the condition axis itself).
 
 ---
 
@@ -313,13 +324,13 @@ The goal is a census of one book, so the pipeline must be cheap per item and res
 
 ### Stages
 
-**S1. Item extraction.** `physform ingest extract --book CM --chapter 2` produces a `ledger.csv` of every numbered item in the chapter (theorem, lemma, example, exercise) with label, pages, and a one-line paraphrased description. Human-in-the-loop: the extraction may be LLM-assisted from the PDF, but a human confirms the ledger. The ledger is the coverage denominator — it must include items we will *not* formalize.
+**S1. Item extraction.** `physproofbench ingest extract --book SM --chapter 1` produces a `ledger.csv` of every numbered item in the chapter (theorem, lemma, example, exercise) with label, pages, and a one-line paraphrased description. Human-in-the-loop: the extraction may be LLM-assisted from the PDF, but a human confirms the ledger. The ledger is the coverage denominator — it must include items we will *not* formalize.
 
 **S2. Triage.** Each ledger row gets `triage ∈ {formalizable, out_of_scope, blocked}` with a reason. `out_of_scope` covers essay prompts, plotting, numerical computation, and anything requiring machinery we have ruled out. `blocked` records a specific library gap and feeds `docs/GAPS.md`. Report coverage as *formalized / formalizable / total*, and never hide the denominator.
 
 **S3. Paraphrase.** Write `nl.md` with `## statement` and `## proof` anchors, in the contributor's own words (§2.1).
 
-**S4. Statement drafting.** LLM-assisted drafting is fine, but the draft must be accompanied by the `hidden_assumptions` list and every added hypothesis classified. Provide `physform ingest draft <id>` to scaffold the files and open the right editor buffers.
+**S4. Statement drafting.** LLM-assisted drafting is fine, but the draft must be accompanied by the `hidden_assumptions` list and every added hypothesis classified. Provide `physproofbench ingest draft <id>` to scaffold the files and open the right editor buffers.
 
 **S5. Proof.** Write the reference proof in the private repo. Agent assistance is expected; guard against hypothesis creep by re-running the L2 statement-preservation check after every session, so the statement cannot drift to meet the proof.
 
@@ -331,29 +342,41 @@ The goal is a census of one book, so the pipeline must be cheap per item and res
 - Do units/dimensions typecheck where the Core layer applies?
 - Is `proof_kind` right, and for approximations, is the chosen `encoding` the honest one?
 
-**S7. Promote.** `physform ingest promote <id>` runs all CI checks and flips `status: active`.
+**S7. Promote.** `physproofbench ingest promote <id>` runs all CI checks and flips `status: active`.
 
 ### Tooling requirements
 
 - Every stage is resumable and idempotent; state lives in the files, not in the tool.
-- `physform ingest status --book CM` prints the coverage table by chapter.
-- `physform item new` scaffolds from a template so schema drift is impossible.
+- `physproofbench ingest status --book SM` prints the coverage table by chapter.
+- `physproofbench item new` scaffolds from a template so schema drift is impossible.
 - Contamination control: reference proofs live only in the private repo, and the public repo publishes statements, difficulty bands, and the dependency ledger — mirroring AxQM's arrangement. Add a CI job in the private repo that fails if a solution file is ever added to the public tree.
 
 ---
 
 ## 8. Runner and reproducibility
 
-- `physform run --items all --mode proof --condition no_nl_proof --model <name> -k 8` writes `runs/<timestamp>-<slug>/` containing: resolved config, prompt hashes, raw completions, extracted Lean, per-item grading JSON, and a summary table.
+- `physproofbench run --items all --mode proof --condition no_nl_proof --model <name> -k 8` writes `runs/<timestamp>-<slug>/` containing: resolved config, prompt hashes, raw completions, extracted Lean, per-item grading JSON, and a summary table.
 - Prompts are rendered from frozen templates in `docs/PROMPTS.md`; the template hash goes into run metadata. **Prompts are part of the benchmark**: changing them changes the numbers.
 - Extraction of Lean from a completion is its own failure mode. Specify one rule (last fenced ```lean block; if absent, the whole completion) and log when the fallback fires.
 - Cache by `(item, condition, model, template_hash, sample_index)` so reruns are cheap.
 - Parallelism over items with a configurable Lean-compile worker pool; Lean builds are memory-hungry, so default to `min(4, cpu_count // 2)`.
-- Results schema is stable and versioned (`grading_version`, `pin_hash`); `physform report` regenerates tables from stored JSON without re-running models.
+- Results schema is stable and versioned (`grading_version`, `pin_hash`); `physproofbench report` regenerates tables from stored JSON without re-running models.
 
 ---
 
 ## 9. Seed item (build this first, end to end)
+
+**Built (M0): `SM_01_009_001`**, not `CM_02_002_001` below — that item is from the continuum-mechanics placeholder book and was never started; per §2/`docs/DECISIONS.md` the census book is `SM` (Friedli–Velenik), so the seed item was picked from its ch. 1 instead.
+
+- **Item:** Lemma 1.9 (p. 21) — the uniform distribution on a finite, nonempty set of microstates `Ω` is the *unique* probability distribution maximizing Shannon entropy `S(μ) = -Σ_ω μ(ω) log μ(ω)`, with maximal value `log|Ω|`.
+- **NL statement / proof (paraphrased):** `items/SM_01_009_001/nl.md`.
+- **Tags:** `proof_kind: exact` — no hidden assumptions; the source's own hypotheses (`Ω` finite, `μ` a distribution) are exactly what got formalized.
+- **Gold statement:** `lean/PhysProofBench/Items/SM_01_009_001.lean`, declaration `shannonEntropy_le_log_card`. Not split into sub-items — unlike the rigid-motion TFAE below, this is a single inequality-plus-iff, not a multi-step equivalence chain, so splitting wasn't warranted.
+- **Reference proof:** `lean/PhysProofBenchSolutions/SM_01_009_001.lean` (private repo), `sorry`-free, axioms `{propext, Classical.choice, Quot.sound}`. Uses `Mathlib.Analysis.Convex.Jensen`'s `StrictConcaveOn.map_sum_eq_iff_of_nonneg` (equality case of Jensen's inequality) applied to Mathlib's own `Real.negMulLog`, which is already proven strictly concave on `[0,∞)` — no concavity proof was written from scratch. Full derivation and the design decisions behind it: `items/SM_01_009_001/notes.md`.
+- **Witness:** not needed — no hidden assumptions to make jointly satisfiable, and existence of the maximizer (the uniform distribution itself) is immediate for any finite nonempty `Ω`.
+- Did **not** need `Core/Tensors.lean`, `Core/Kinematics.lean`, `Core/Units.lean`, or `Core/Approx.lean` (§5.2) — built `Core/Probability.lean` instead. Did not need Physlib.
+
+*(Original text below, kept for context on the continuum-mechanics book this section was originally written against — not built, and not planned unless `CM` becomes a later `source.book`.)*
 
 `CM_02_002_001` — characterization of rigid motions. Use it to exercise every part of the system before scaling.
 
@@ -370,13 +393,14 @@ Expect `(iii) ⟹ (i)` to be the hard one: the source's arc-length argument need
 
 ## 10. Milestones and acceptance criteria
 
-**M0 — skeleton (target: 1 item).**
-Lean project builds against pinned Mathlib; `CM_02_002_001` sub-items compile with `sorry`; at least one has a `sorry`-free reference proof in the private repo; `physform` CLI installs; `physform grade` runs L0–L2 on a hand-written correct submission and on three hand-written cheating submissions (a `sorry`, a `native_decide`, a tampered statement) and classifies all four correctly.
+**M0 — skeleton (target: 1 item). ✅ Done.**
+Lean project builds against pinned Mathlib; `CM_02_002_001` sub-items compile with `sorry`; at least one has a `sorry`-free reference proof in the private repo; `physproofbench` CLI installs; `physproofbench grade` runs L0–L2 on a hand-written correct submission and on three hand-written cheating submissions (a `sorry`, a `native_decide`, a tampered statement) and classifies all four correctly.
 *Acceptance: `pytest` green; those four fixtures live in `tests/fixtures/` forever.*
+*(Actual: seed item is `SM_01_009_001`, not `CM_02_002_001` — see §9. All other acceptance criteria met as literally written: 32 tests green, including the four required fixtures in `tests/fixtures/`.)*
 
 **M1 — both modes, one model.**
 Prompt templates frozen; all four conditions runnable; L3 bridge checks and L3b vacuity probes implemented; one real model evaluated on the seed items; a `runs/` directory with a readable summary table.
-*Acceptance: `physform report` reproduces the table from stored JSON with models disabled.*
+*Acceptance: `physproofbench report` reproduces the table from stored JSON with models disabled.*
 
 **M2 — grading hardened.**
 Two judges wired up with agreement statistics; adjudication queue; `docs/GRADING.md` matches the code; regression fixtures from adjudicated disagreements.
@@ -407,11 +431,11 @@ Remaining chapters ingested; baselines for several models across all four condit
 
 ## 12. Open questions for the maintainer
 
-Answer these before M2; record answers in `docs/DECISIONS.md`.
+Answer these before M2; record answers in `docs/DECISIONS.md`. Status as of M0:
 
-1. Which book is the census target, and which edition?
-2. Tensors as `Matrix (Fin 3) (Fin 3) ℝ` or as linear maps on `EuclideanSpace ℝ (Fin 3)`?
-3. Do items carry units/dimensions by default, or only where the physics turns on them?
-4. Is prover-assisted bridging (L3 step 3) allowed in the headline configuration, or reported only as a secondary number?
-5. For `proof_kind: approximation` items, is the gold encoding fixed per item, or may a submission choose any of the four encodings and be judged on the choice?
-6. Public licence for the item data, and the policy on accepting community items from other books.
+1. ~~Which book is the census target, and which edition?~~ **Answered:** `SM` — Friedli & Velenik, *Statistical Mechanics: A Mathematical Introduction*, "Revised version, August 22 2017" draft. `docs/SOURCE.md#sm`, `docs/DECISIONS.md` item 1. (ISBN still unconfirmed — flagged there, not blocking.)
+2. ~~Tensors as `Matrix (Fin 3) (Fin 3) ℝ` or as linear maps on `EuclideanSpace ℝ (Fin 3)`?~~ **Moot for now:** `SM` doesn't need tensors this early. `docs/DECISIONS.md` item 2 — revisit if a later chapter needs them.
+3. Do items carry units/dimensions by default, or only where the physics turns on them? **Still open** — `docs/DECISIONS.md` item 3. `SM`'s early chapters are dimensionless, so this hasn't been forced yet.
+4. Is prover-assisted bridging (L3 step 3) allowed in the headline configuration, or reported only as a secondary number? **Still open** — L3 (`bridge.py`) isn't built yet (M1).
+5. For `proof_kind: approximation` items, is the gold encoding fixed per item, or may a submission choose any of the four encodings and be judged on the choice? **Still open** — no `approximation` item exists yet.
+6. Public licence for the item data, and the policy on accepting community items from other books. **Still open**, deferred to M4 per §10.
