@@ -29,8 +29,11 @@ class RunResult:
     condition: str
     template_hash: str
     used_extraction_fallback: bool
-    grade: GradeReport
+    # None when the model returned no content at all (nothing to grade).
+    grade: GradeReport | None
     run_dir: Path
+    finish_reason: str | None = None
+    had_reasoning: bool = False
 
 
 def _extract_nl_section(nl_md_text: str, anchor: str) -> str:
@@ -54,6 +57,8 @@ def run_item_once(
     lean_project_dir: Path,
     out_dir: Path,
     temperature: float = 0.0,
+    max_tokens: int = 16384,
+    enable_thinking: bool | None = None,
 ) -> RunResult:
     item_dir = items_dir / item_id
     meta = load_item_meta(item_dir / "meta.yaml")
@@ -74,7 +79,13 @@ def run_item_once(
     )
     prompt_hash = template_hash(prompt)
 
-    completion = complete(prompt, model=model, temperature=temperature)
+    completion = complete(
+        prompt,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        enable_thinking=enable_thinking,
+    )
     extraction = extract_lean(completion.text)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -82,6 +93,8 @@ def run_item_once(
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
     (run_dir / "completion_raw.txt").write_text(completion.text, encoding="utf-8")
+    if completion.reasoning:
+        (run_dir / "reasoning.txt").write_text(completion.reasoning, encoding="utf-8")
     (run_dir / "candidate.lean").write_text(extraction.lean, encoding="utf-8")
     (run_dir / "meta.json").write_text(
         json.dumps(
@@ -93,13 +106,32 @@ def run_item_once(
                 "template_version": "v1",
                 "template_hash": prompt_hash,
                 "temperature": temperature,
+                "max_tokens": max_tokens,
+                "enable_thinking": enable_thinking,
                 "finish_reason": completion.finish_reason,
+                "had_reasoning": bool(completion.reasoning),
                 "used_extraction_fallback": extraction.used_fallback,
             },
             indent=2,
         ),
         encoding="utf-8",
     )
+
+    if not completion.text.strip():
+        # Nothing to grade. Grading the empty string would report a
+        # misleading gate failure (statement_edited) for what is really a
+        # truncated or empty generation.
+        return RunResult(
+            item_id=item_id,
+            model=model,
+            condition=condition,
+            template_hash=prompt_hash,
+            used_extraction_fallback=extraction.used_fallback,
+            grade=None,
+            run_dir=run_dir,
+            finish_reason=completion.finish_reason,
+            had_reasoning=bool(completion.reasoning),
+        )
 
     report = grade_submission(
         lean_project_dir=lean_project_dir,
@@ -132,4 +164,6 @@ def run_item_once(
         used_extraction_fallback=extraction.used_fallback,
         grade=report,
         run_dir=run_dir,
+        finish_reason=completion.finish_reason,
+        had_reasoning=bool(completion.reasoning),
     )

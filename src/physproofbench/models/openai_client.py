@@ -20,6 +20,12 @@ class Completion:
     text: str
     model: str
     finish_reason: str | None
+    # Reasoning-model "thinking" text, when the server splits it out of
+    # `content` (vLLM's reasoning parser exposes it as `reasoning_content`,
+    # newer versions as `reasoning`). Empty `text` with a non-empty
+    # `reasoning` and finish_reason "length" means the token budget was
+    # spent thinking.
+    reasoning: str | None = None
 
 
 def get_client() -> OpenAI:
@@ -36,22 +42,35 @@ def complete(
     model: str,
     system: str | None = None,
     temperature: float = 0.0,
-    max_tokens: int = 4096,
+    max_tokens: int = 16384,
+    enable_thinking: bool | None = None,
 ) -> Completion:
+    """`enable_thinking=False` asks a Qwen3-style chat template to skip the
+    reasoning phase (sent as `chat_template_kwargs`, a vLLM extension);
+    `None` leaves the server/model default alone."""
     client = get_client()
     messages: list[dict[str, str]] = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
+    extra_body = None
+    if enable_thinking is not None:
+        extra_body = {"chat_template_kwargs": {"enable_thinking": enable_thinking}}
     resp = client.chat.completions.create(
         model=model,
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
+        extra_body=extra_body,
     )
     choice = resp.choices[0]
+    message = choice.message
+    reasoning = getattr(message, "reasoning_content", None) or getattr(
+        message, "reasoning", None
+    )
     return Completion(
-        text=choice.message.content or "",
+        text=message.content or "",
         model=resp.model,
         finish_reason=choice.finish_reason,
+        reasoning=reasoning,
     )
