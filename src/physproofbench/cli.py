@@ -87,6 +87,20 @@ def grade(
     show_default=True,
 )
 @click.option("--temperature", type=float, default=0.0, show_default=True)
+@click.option(
+    "--max-tokens",
+    type=int,
+    default=16384,
+    show_default=True,
+    help="Completion budget. Reasoning models spend it on thinking first.",
+)
+@click.option(
+    "--thinking/--no-thinking",
+    "thinking",
+    default=None,
+    help="Send chat_template_kwargs.enable_thinking (Qwen3-style templates via "
+    "vLLM). Default: leave the server/model default alone.",
+)
 def run(
     item_id: str,
     model: str,
@@ -95,6 +109,8 @@ def run(
     lean_project: Path,
     out_dir: Path,
     temperature: float,
+    max_tokens: int,
+    thinking: bool | None,
 ) -> None:
     """Render a prompt for one item (`proof` mode), call the model at
     OPENAI_BASE_URL, extract the Lean block, and grade it (L0-L2).
@@ -110,9 +126,29 @@ def run(
         lean_project_dir=lean_project,
         out_dir=out_dir,
         temperature=temperature,
+        max_tokens=max_tokens,
+        enable_thinking=thinking,
     )
     click.echo(f"run dir: {result.run_dir}")
     click.echo(f"template hash: {result.template_hash}")
+    click.echo(f"finish_reason: {result.finish_reason}")
+    if result.grade is None:
+        click.echo(
+            "verdict: no_output -- the model returned empty content, so there "
+            "was nothing to grade."
+        )
+        if result.finish_reason == "length":
+            click.echo(
+                "  Token budget exhausted"
+                + (" while thinking (see reasoning.txt)" if result.had_reasoning else "")
+                + f". Raise --max-tokens (now {max_tokens}) or try --no-thinking."
+            )
+        raise SystemExit(2)
+    if result.finish_reason == "length":
+        click.echo(
+            "WARNING: generation hit the token limit; the Lean block may be "
+            "truncated. Consider a larger --max-tokens."
+        )
     if result.used_extraction_fallback:
         click.echo(
             "WARNING: no ```lean fenced block found in the completion; "
