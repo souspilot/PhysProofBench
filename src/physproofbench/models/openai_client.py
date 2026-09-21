@@ -28,12 +28,16 @@ class Completion:
     reasoning: str | None = None
 
 
-def get_client() -> OpenAI:
+def get_client(timeout: float | None = 3600.0) -> OpenAI:
+    """`timeout=None` disables the client-side timeout. The SDK default is
+    10 minutes with 2 retries, which is wrong for long generations: a slow
+    reasoning trace that outlives it is abandoned and then *regenerated*.
+    Retries are therefore off; a failed generation should fail loudly."""
     api_key = os.environ.get("OPENAI_API_KEY")
     base_url = os.environ.get("OPENAI_BASE_URL")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not set")
-    return OpenAI(api_key=api_key, base_url=base_url)
+    return OpenAI(api_key=api_key, base_url=base_url, timeout=timeout, max_retries=0)
 
 
 def complete(
@@ -42,13 +46,18 @@ def complete(
     model: str,
     system: str | None = None,
     temperature: float = 0.0,
-    max_tokens: int = 16384,
+    max_tokens: int | None = 16384,
     enable_thinking: bool | None = None,
+    timeout: float | None = 3600.0,
 ) -> Completion:
-    """`enable_thinking=False` asks a Qwen3-style chat template to skip the
+    """`max_tokens=None` or any value <= 0 (0, -1) means *no cap*: the
+    parameter is omitted from the request, so the server generates until the
+    model stops or its context window is full.
+
+    `enable_thinking=False` asks a Qwen3-style chat template to skip the
     reasoning phase (sent as `chat_template_kwargs`, a vLLM extension);
     `None` leaves the server/model default alone."""
-    client = get_client()
+    client = get_client(timeout)
     messages: list[dict[str, str]] = []
     if system:
         messages.append({"role": "system", "content": system})
@@ -56,12 +65,15 @@ def complete(
     extra_body = None
     if enable_thinking is not None:
         extra_body = {"chat_template_kwargs": {"enable_thinking": enable_thinking}}
+    request: dict = {}
+    if max_tokens is not None and max_tokens > 0:
+        request["max_tokens"] = max_tokens
     resp = client.chat.completions.create(
         model=model,
         messages=messages,
         temperature=temperature,
-        max_tokens=max_tokens,
         extra_body=extra_body,
+        **request,
     )
     choice = resp.choices[0]
     message = choice.message
