@@ -20,7 +20,12 @@ Reject the submission before compiling if it contains, as raw text:
   beyond what the item's own `meta.yaml` allows), or any `set_option` that
   disables a check — at minimum `debug.skipKernelTC`
 - (`proof` mode only) any edit to the statement region: the submission is
-  diffed against the item file up to its `:= by` marker. This is a *belt*
+  diffed against the item file up to its `:= by` marker. The diff ignores
+  comments (including docstrings) and whitespace, but nothing else: an added
+  `import`, `open`, or `def` before the theorem still counts as an edit, since
+  it could change what the statement means. (Models routinely drop or
+  rewrite the item's tag comments and docstring; a comment-sensitive diff
+  rejected otherwise-valid answers. Found on a real Qwen3 run.) This is a *belt*
   check; the *braces* check is the independent L2.4 implication check below —
   text diffs alone are easy to defeat.
 
