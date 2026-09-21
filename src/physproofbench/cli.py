@@ -165,6 +165,11 @@ def run(
             "WARNING: generation hit the token limit; the Lean block may be "
             "truncated. Consider a larger --max-tokens."
         )
+    if result.unterminated_fence:
+        click.echo(
+            "WARNING: the ```lean fence was opened but never closed; graded "
+            "everything after it."
+        )
     if result.used_extraction_fallback:
         click.echo(
             "WARNING: no ```lean fenced block found in the completion; "

@@ -34,6 +34,7 @@ class RunResult:
     run_dir: Path
     finish_reason: str | None = None
     had_reasoning: bool = False
+    unterminated_fence: bool = False
 
 
 def _extract_nl_section(nl_md_text: str, anchor: str) -> str:
@@ -114,6 +115,7 @@ def run_item_once(
                 "finish_reason": completion.finish_reason,
                 "had_reasoning": bool(completion.reasoning),
                 "used_extraction_fallback": extraction.used_fallback,
+                "unterminated_fence": extraction.unterminated_fence,
             },
             indent=2,
         ),
@@ -169,4 +171,5 @@ def run_item_once(
         run_dir=run_dir,
         finish_reason=completion.finish_reason,
         had_reasoning=bool(completion.reasoning),
+        unterminated_fence=extraction.unterminated_fence,
     )

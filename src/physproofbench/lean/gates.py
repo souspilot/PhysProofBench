@@ -42,21 +42,54 @@ class GateResult:
         return self.passed
 
 
+def strip_lean_comments(text: str) -> str:
+    """Remove `-- line`, `/- block -/` (nested) and `/-- doc -/` comments,
+    leaving string literals intact. Lean block comments nest."""
+    out: list[str] = []
+    i, n, depth = 0, len(text), 0
+    while i < n:
+        two = text[i : i + 2]
+        if depth > 0:
+            if two == "/-":
+                depth += 1
+                i += 2
+            elif two == "-/":
+                depth -= 1
+                i += 2
+            else:
+                i += 1
+            continue
+        if two == "/-":
+            depth = 1
+            i += 2
+            out.append(" ")
+        elif two == "--":
+            while i < n and text[i] != "\n":
+                i += 1
+        elif text[i] == '"':
+            j = i + 1
+            while j < n and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            out.append(text[i : j + 1])
+            i = j + 1
+        else:
+            out.append(text[i])
+            i += 1
+    return "".join(out)
+
+
+def _canonical(text: str) -> str:
+    """Comment- and whitespace-insensitive form, for comparing statements."""
+    return " ".join(strip_lean_comments(text).split())
+
+
 def _statement_prefix(text: str) -> str | None:
-    """Text up to (and excluding) the first `:= by` marker, or None if absent."""
-    idx = text.find(_STATEMENT_MARKER)
+    """Canonical text up to (and excluding) the first `:= by`, or None."""
+    canon = _canonical(text)
+    idx = canon.find(_STATEMENT_MARKER)
     if idx == -1:
         return None
-    return text[:idx]
-
-
-def _normalize(text: str) -> str:
-    lines = [line.rstrip() for line in text.splitlines()]
-    while lines and not lines[0]:
-        lines.pop(0)
-    while lines and not lines[-1]:
-        lines.pop()
-    return "\n".join(lines)
+    return canon[:idx].strip()
 
 
 def check_gates(
@@ -102,7 +135,7 @@ def check_gates(
                 f"gold_text has no '{_STATEMENT_MARKER}' marker; cannot check "
                 "for statement tampering"
             )
-        if sub_prefix is None or _normalize(sub_prefix) != _normalize(gold_prefix):
+        if sub_prefix is None or sub_prefix != gold_prefix:
             failures.append("gate: statement_edited")
 
     return GateResult(passed=not failures, failures=failures)
