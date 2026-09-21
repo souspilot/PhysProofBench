@@ -21,9 +21,11 @@ Reject the submission before compiling if it contains, as raw text:
   disables a check — at minimum `debug.skipKernelTC`
 - (`proof` mode only) any edit to the statement region: the submission is
   diffed against the item file up to its `:= by` marker. The diff ignores
-  comments (including docstrings) and whitespace, but nothing else: an added
-  `import`, `open`, or `def` before the theorem still counts as an edit, since
-  it could change what the statement means. (Models routinely drop or
+  comments (including docstrings), whitespace, and extra `import Mathlib[.…]`
+  lines (which only add declarations and are added by nearly every model),
+  but nothing else: any other added `import`, an added `open`, or a `def`
+  before the theorem still counts as an edit, since it could change what the
+  statement means. (Models routinely drop or
   rewrite the item's tag comments and docstring; a comment-sensitive diff
   rejected otherwise-valid answers. Found on a real Qwen3 run.) This is a *belt*
   check; the *braces* check is the independent L2.4 implication check below —
@@ -46,6 +48,13 @@ see `docs/SOURCE.md` / `lean/lakefile.toml`), in a sandbox with:
   packages, or attempt to shell out)
 
 Record: exit status, stderr, elapsed time, and the full diagnostic list.
+
+Setup requirement: the precompiled Mathlib cache (`lake exe cache get`) does not
+include the umbrella `Mathlib.olean`, so a submission containing a bare
+`import Mathlib` (which the prompt invites, and nearly every model writes) fails
+L1 with "object file ... Mathlib.olean of module Mathlib does not exist"
+regardless of its proof. Build it once per environment with `lake build
+Mathlib` (about 75 seconds locally, after the cache is populated).
 
 Implementation note: the submission is compiled with the raw `lean` binary,
 not `lake env lean <file>`. The Lake environment (`LEAN_PATH` and friends) is
