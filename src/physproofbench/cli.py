@@ -92,7 +92,15 @@ def grade(
     type=int,
     default=16384,
     show_default=True,
-    help="Completion budget. Reasoning models spend it on thinking first.",
+    help="Completion budget. Reasoning models spend it on thinking first. "
+    "0 or -1 = no cap (limited only by the model's context window).",
+)
+@click.option(
+    "--timeout",
+    type=float,
+    default=3600.0,
+    show_default=True,
+    help="Client-side request timeout in seconds; 0 = none. Retries are off.",
 )
 @click.option(
     "--thinking/--no-thinking",
@@ -110,6 +118,7 @@ def run(
     out_dir: Path,
     temperature: float,
     max_tokens: int,
+    timeout: float,
     thinking: bool | None,
 ) -> None:
     """Render a prompt for one item (`proof` mode), call the model at
@@ -128,6 +137,7 @@ def run(
         temperature=temperature,
         max_tokens=max_tokens,
         enable_thinking=thinking,
+        timeout=timeout if timeout > 0 else None,
     )
     click.echo(f"run dir: {result.run_dir}")
     click.echo(f"template hash: {result.template_hash}")
@@ -141,7 +151,13 @@ def run(
             click.echo(
                 "  Token budget exhausted"
                 + (" while thinking (see reasoning.txt)" if result.had_reasoning else "")
-                + f". Raise --max-tokens (now {max_tokens}) or try --no-thinking."
+                + (
+                    ". Uncapped, so the context window was exhausted; try "
+                    "--no-thinking or a shorter prompt."
+                    if max_tokens <= 0
+                    else f". Raise --max-tokens (now {max_tokens}, 0 = no cap) "
+                    "or try --no-thinking."
+                )
             )
         raise SystemExit(2)
     if result.finish_reason == "length":

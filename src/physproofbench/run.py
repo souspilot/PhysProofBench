@@ -57,8 +57,9 @@ def run_item_once(
     lean_project_dir: Path,
     out_dir: Path,
     temperature: float = 0.0,
-    max_tokens: int = 16384,
+    max_tokens: int | None = 16384,
     enable_thinking: bool | None = None,
+    timeout: float | None = 3600.0,
 ) -> RunResult:
     item_dir = items_dir / item_id
     meta = load_item_meta(item_dir / "meta.yaml")
@@ -85,6 +86,7 @@ def run_item_once(
         temperature=temperature,
         max_tokens=max_tokens,
         enable_thinking=enable_thinking,
+        timeout=timeout,
     )
     extraction = extract_lean(completion.text)
 
@@ -106,7 +108,8 @@ def run_item_once(
                 "template_version": "v1",
                 "template_hash": prompt_hash,
                 "temperature": temperature,
-                "max_tokens": max_tokens,
+                # null = uncapped (server-side context limit only)
+                "max_tokens": max_tokens if max_tokens and max_tokens > 0 else None,
                 "enable_thinking": enable_thinking,
                 "finish_reason": completion.finish_reason,
                 "had_reasoning": bool(completion.reasoning),
