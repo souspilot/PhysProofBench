@@ -1,0 +1,37 @@
+id: SM_02_Q11_001
+schema_version: 1
+status: draft
+source:
+  book: SM
+  chapter: 2
+  item_label: eqn. (2.11) / Exercise 2.1
+  pages:
+  - 62
+topic:
+- combinatorics
+- stirling
+- curie-weiss
+- entropy
+proof_kind: approximation
+approximation:
+  flavor: controlled
+  encoding: error_bound
+hidden_assumptions: []
+lean_file: lean/PhysProofBench/Items/SM_02_Q11_001.lean
+decl_name: choose_exp_cwEntropy_bounds
+solution_file: lean/PhysProofBenchSolutions/SM_02_Q11_001.lean
+imports_physlib: false
+modes:
+- proof
+- autoform
+nl:
+  statement: nl.md#statement
+difficulty:
+  decl_count: 30
+  band: large
+depends_on: []
+core_deps:
+- PhysProofBench.Core.CurieWeiss
+library_gaps: []
+contributed_by: harshitbiitk@gmail.com
+reviewed_by: []

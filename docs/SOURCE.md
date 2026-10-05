@@ -32,7 +32,12 @@ chapter has been censused (S1 ledger extraction hasn't run).
 
 | Chapter | Ledger extracted (S1) | Items formalized | Items active |
 |---|---|---|---|
-| 1. Introduction | no | 1: `SM_01_009_001` (Lemma 1.9, seed item, `status: draft`) | 0 |
+| 1. Introduction | no | 8: `SM_01_009_001` (Lemma 1.9, seed), `SM_01_E06_001`, `SM_01_E05_001`, `SM_01_Q43_001`, `SM_01_E01_001`, `SM_01_E02_001`, `SM_01_E03_001`, `SM_01_006_001` | 0 |
+| 2. The Curie–Weiss Model | no | 2: `SM_02_Q11_001`, `SM_02_002_001` | 0 |
+| 3. The Ising Model | no | 2: `SM_03_005_001`, `SM_03_009_001` | 0 |
+
+All 12 are `status: draft`. Only `SM_01_009_001` has a reference proof; the
+other 11 are statement-only (see `docs/DECISIONS.md`, "First item batch").
 
 ### Item ID convention for this book
 
@@ -50,3 +55,15 @@ where `<ITEM NUMBER>` is the book's own chapter-local number (e.g. `009` for
 "Lemma 1.9") and `<SEQ>` disambiguates when one book item is split into
 several Lean items (`001`, `002`, ... — see `plan.md` §9 for why splitting is
 sometimes necessary). A book item that is not split still gets `_001`.
+
+Friedli–Velenik number **exercises** in a separate per-chapter sequence
+(Exercise 1.6 and Example 1.6 both exist), and some results worth
+formalizing are stated in running text at a numbered equation rather than as
+a numbered lemma/theorem. `<ITEM NUMBER>` therefore also takes two lettered
+forms, each a letter plus two digits so the field stays three characters:
+
+- `E<nn>`: Exercise `<chapter>.<nn>`, e.g. `SM_01_E06_001` = Exercise 1.6.
+- `Q<nn>`: the result at equation `(<chapter>.<nn>)`, e.g. `SM_02_Q11_001`
+  = eqn. (2.11), `SM_01_Q43_001` = eqn. (1.43).
+
+`schema.ID_PATTERN` accepts exactly these three forms.

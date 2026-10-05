@@ -1,0 +1,38 @@
+id: SM_01_Q43_001
+schema_version: 1
+status: draft
+source:
+  book: SM
+  chapter: 1
+  item_label: eqn. (1.43) and following Taylor expansion (§1.3.2)
+  pages:
+  - 34
+topic:
+- statistical-mechanics
+- lattice-gas
+- ideal-gas
+- equation-of-state
+proof_kind: approximation
+approximation:
+  flavor: controlled
+  encoding: asymptotic
+hidden_assumptions: []
+lean_file: lean/PhysProofBench/Items/SM_01_Q43_001.lean
+decl_name: hardCore_idealGasLaw
+solution_file: lean/PhysProofBenchSolutions/SM_01_Q43_001.lean
+imports_physlib: false
+modes:
+- proof
+- autoform
+nl:
+  statement: nl.md#statement
+  proof: nl.md#proof
+difficulty:
+  decl_count: 12
+  band: moderate
+depends_on: []
+core_deps:
+- PhysProofBench.Core.LatticeGas
+library_gaps: []
+contributed_by: harshitbiitk@gmail.com
+reviewed_by: []

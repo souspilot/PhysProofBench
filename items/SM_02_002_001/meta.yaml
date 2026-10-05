@@ -1,0 +1,40 @@
+id: SM_02_002_001
+schema_version: 1
+status: draft
+source:
+  book: SM
+  chapter: 2
+  item_label: Theorem 2.2 (part 1)
+  pages:
+  - 60
+topic:
+- statistical-mechanics
+- curie-weiss
+- mean-field
+- concentration
+proof_kind: approximation
+approximation:
+  flavor: uncontrolled
+  encoding: model_substitution
+hidden_assumptions: []
+lean_file: lean/PhysProofBench/Items/SM_02_002_001.lean
+decl_name: cw_magnetization_concentrates_subcritical
+solution_file: lean/PhysProofBenchSolutions/SM_02_002_001.lean
+imports_physlib: false
+modes:
+- proof
+- autoform
+nl:
+  statement: nl.md#statement
+  proof: nl.md#proof
+difficulty:
+  decl_count: 45
+  band: very_large
+depends_on:
+- SM_02_Q11_001
+core_deps:
+- PhysProofBench.Core.Spin
+- PhysProofBench.Core.CurieWeiss
+library_gaps: []
+contributed_by: harshitbiitk@gmail.com
+reviewed_by: []

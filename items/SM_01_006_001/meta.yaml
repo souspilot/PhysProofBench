@@ -1,0 +1,40 @@
+id: SM_01_006_001
+schema_version: 1
+status: draft
+source:
+  book: SM
+  chapter: 1
+  item_label: Example 1.6
+  pages:
+  - 9
+  - 10
+topic:
+- thermodynamics
+- ideal-gas
+- equation-of-state
+- entropy
+proof_kind: hidden_assumption
+hidden_assumptions:
+- id: global_equations_of_state
+  kind: domain
+  lean: '∀ e : ℝ, 0 < e → ∀ v : ℝ, 0 < v → HasDerivAt ... (with he, hv)'
+  justification: source_implied
+  note: The source integrates ds between an arbitrary reference point and (e, v). That is valid only if both equations of state hold on a connected region containing both points; we assume they hold on the whole quadrant e, v > 0.
+lean_file: lean/PhysProofBench/Items/SM_01_006_001.lean
+decl_name: idealGas_entropy_per_particle
+solution_file: lean/PhysProofBenchSolutions/SM_01_006_001.lean
+imports_physlib: false
+modes:
+- proof
+- autoform
+nl:
+  statement: nl.md#statement
+  proof: nl.md#proof
+difficulty:
+  decl_count: 6
+  band: small
+depends_on: []
+core_deps: []
+library_gaps: []
+contributed_by: harshitbiitk@gmail.com
+reviewed_by: []

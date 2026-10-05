@@ -1,0 +1,49 @@
+id: SM_01_E01_001
+schema_version: 1
+status: draft
+source:
+  book: SM
+  chapter: 1
+  item_label: Exercise 1.1
+  pages:
+  - 7
+topic:
+- thermodynamics
+- entropy
+- extensivity
+- homogeneity
+proof_kind: hidden_assumption
+hidden_assumptions:
+- id: integer_scaling
+  kind: modeling
+  lean: '∀ n : ℕ, 0 < n → ∀ X ∈ PosOrthant, S ((n : ℝ) • X) = n * S X'
+  justification: source_implied
+  note: The exercise asks for homogeneity 'from the postulate' (additivity, the extremum principle, and Remark 1.1's identical systems sharing one entropy function) without saying how. The step 'n identical copies merged into one system have entropy n·S(X)' is never stated; we assume it directly.
+- id: continuity
+  kind: regularity
+  lean: ContinuousOn S PosOrthant
+  justification: source_stated
+  note: 'Borderline: the postulate states differentiability, which implies this. Listed because the source''s hint (''consider first λ ∈ ℚ'') silently needs it to pass from rational to real λ.'
+- id: positive_orthant
+  kind: domain
+  lean: PosOrthant
+  justification: encoding_artifact
+  note: The source does not name S's domain; we take U, V, N > 0.
+lean_file: lean/PhysProofBench/Items/SM_01_E01_001.lean
+decl_name: entropy_positively_homogeneous
+solution_file: lean/PhysProofBenchSolutions/SM_01_E01_001.lean
+imports_physlib: false
+modes:
+- proof
+- autoform
+nl:
+  statement: nl.md#statement
+difficulty:
+  decl_count: 10
+  band: moderate
+depends_on: []
+core_deps:
+- PhysProofBench.Core.Thermo
+library_gaps: []
+contributed_by: harshitbiitk@gmail.com
+reviewed_by: []
