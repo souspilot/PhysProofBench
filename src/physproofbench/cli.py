@@ -213,9 +213,13 @@ def _generation_options(f):
         click.option("--top-p", type=float, default=0.95, show_default=True),
         click.option("--top-k", type=int, default=20, show_default=True,
                      help="vLLM extension; -1 = disabled."),
-        click.option("--max-tokens", type=int, default=32768, show_default=True,
-                     help="Per-sample completion budget, thinking included. "
-                     "0 = uncapped (up to the context window)."),
+        click.option("--max-tokens", default="32768", show_default=True,
+                     help="Per-sample completion budget, thinking included: a number, "
+                     "or 'full' = the server's context window minus the prompt minus "
+                     "--answer-reserve (resolved and recorded at run time)."),
+        click.option("--answer-reserve", type=int, default=8192, show_default=True,
+                     help="With --max-tokens full: context kept free so `force-answer` "
+                     "can still get an answer from a sample that used the whole budget."),
         click.option("--thinking/--no-thinking", "thinking", default=None,
                      help="chat_template_kwargs.enable_thinking. Default: server default."),
         click.option("--core-in-context/--no-core-in-context", default=True,
@@ -235,6 +239,34 @@ def _generation_options(f):
     return f
 
 
+_CHARS_PER_TOKEN_EST = 3.0  # conservative: overestimates prompt tokens
+_FULL_SLACK_TOKENS = 512
+
+
+def _full_budget(max_model_len: int | None, longest_prompt_chars: int,
+                 answer_reserve: int) -> int:
+    """Concrete token budget for `--max-tokens full`."""
+    if not max_model_len:
+        raise click.ClickException(
+            "--max-tokens full needs the server's max_model_len, which it didn't report.")
+    budget = (max_model_len - int(longest_prompt_chars / _CHARS_PER_TOKEN_EST)
+              - answer_reserve - _FULL_SLACK_TOKENS)
+    if budget <= 0:
+        raise click.ClickException(f"no budget left: max_model_len {max_model_len} is too "
+                                   "small for the prompts plus --answer-reserve")
+    return budget
+
+
+def _parse_max_tokens(value: str) -> int | None:
+    """None means 'full' (resolved later against the server)."""
+    if value.strip().lower() == "full":
+        return None
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise click.BadParameter(f"--max-tokens must be a number or 'full', not {value!r}") from exc
+
+
 def _build_config_and_plan(model, items, conditions, temperature, top_p, top_k,
                            max_tokens, thinking, core_in_context, seed, items_dir,
                            lean_project, samples):
@@ -249,7 +281,7 @@ def _build_config_and_plan(model, items, conditions, temperature, top_p, top_k,
         temperature=temperature,
         top_p=top_p,
         top_k=None if top_k is not None and top_k < 0 else top_k,
-        max_tokens=max_tokens if max_tokens > 0 else None,
+        max_tokens=max_tokens if max_tokens and max_tokens > 0 else None,
         enable_thinking=thinking,
         core_in_context=core_in_context,
         seed=seed,
@@ -279,8 +311,8 @@ def _print_plan(plan, samples: int) -> None:
 @_generation_options
 @click.option("--samples", "-k", type=int, default=4, show_default=True,
               help="Only used to size the plan shown.")
-def preflight(model, items, conditions, temperature, top_p, top_k, max_tokens, thinking,
-              core_in_context, seed, items_dir, lean_project, samples):
+def preflight(model, items, conditions, temperature, top_p, top_k, max_tokens, answer_reserve,
+              thinking, core_in_context, seed, items_dir, lean_project, samples):
     """Generation side (GPU node): check the model server before `generate`.
 
     Server reachable, --model served, one test request round-trips, and the
@@ -290,14 +322,19 @@ def preflight(model, items, conditions, temperature, top_p, top_k, max_tokens, t
     """
     from .preflight import check_context_budget, check_endpoint
 
+    requested = _parse_max_tokens(max_tokens)
     config, plan = _build_config_and_plan(
-        model, items, conditions, temperature, top_p, top_k, max_tokens, thinking,
+        model, items, conditions, temperature, top_p, top_k, requested, thinking,
         core_in_context, seed, items_dir, lean_project, samples)
     _print_plan(plan, samples)
     checks, max_len = check_endpoint(model, on_check=lambda c: _echo_checks([c]))
     if max_len is not None or all(c.ok for c in checks):
         longest = max((len(p.text) for p in plan.prompts.values()), default=0)
-        budget = check_context_budget(longest, config.max_tokens, max_len)
+        tokens = config.max_tokens
+        if requested is None:
+            tokens = _full_budget(max_len, longest, answer_reserve)
+            click.echo(f"--max-tokens full resolves to {tokens}")
+        budget = check_context_budget(longest, tokens, max_len)
         checks.append(budget)
         _echo_checks([budget])
     raise SystemExit(0 if all(c.ok for c in checks) else 1)
@@ -323,8 +360,8 @@ def _echo_checks(checks) -> None:
               help="Stop sending requests after this many failures in a row.")
 @click.option("--dry-run", is_flag=True,
               help="Render and save prompts, print the plan, call nothing.")
-def generate(model, items, conditions, temperature, top_p, top_k, max_tokens, thinking,
-             core_in_context, seed, items_dir, lean_project, run_dir, samples,
+def generate(model, items, conditions, temperature, top_p, top_k, max_tokens, answer_reserve,
+             thinking, core_in_context, seed, items_dir, lean_project, run_dir, samples,
              concurrency, request_timeout, max_consecutive_errors, dry_run):
     """Generation side (GPU node): sample completions for many items.
 
@@ -333,11 +370,14 @@ def generate(model, items, conditions, temperature, top_p, top_k, max_tokens, th
     failure. Grade with `grade-run`, on any machine with Lean (it can follow
     this run while it is still generating).
     """
+    from dataclasses import replace
+
     from .batch import check_resume_compatible, generate_run
     from .preflight import check_context_budget, check_endpoint
 
+    requested = _parse_max_tokens(max_tokens)
     config, plan = _build_config_and_plan(
-        model, items, conditions, temperature, top_p, top_k, max_tokens, thinking,
+        model, items, conditions, temperature, top_p, top_k, requested, thinking,
         core_in_context, seed, items_dir, lean_project, samples)
     _print_plan(plan, samples)
     if dry_run:
@@ -347,18 +387,21 @@ def generate(model, items, conditions, temperature, top_p, top_k, max_tokens, th
             path.write_text(prompt.text, encoding="utf-8")
         click.echo(f"dry run: prompts written to {run_dir / 'prompts'}; nothing sent.")
         return
-    try:
-        check_resume_compatible(run_dir, config)
-    except ValueError as exc:
-        raise click.ClickException(str(exc)) from exc
     checks, max_len = check_endpoint(model, on_check=lambda c: _echo_checks([c]))
     if all(c.ok for c in checks):
         longest = max((len(p.text) for p in plan.prompts.values()), default=0)
+        if requested is None:
+            config = replace(config, max_tokens=_full_budget(max_len, longest, answer_reserve))
+            click.echo(f"--max-tokens full resolves to {config.max_tokens}")
         budget = check_context_budget(longest, config.max_tokens, max_len)
         checks.append(budget)
         _echo_checks([budget])
     if not all(c.ok for c in checks):
         raise click.ClickException("preflight failed; nothing sent.")
+    try:
+        check_resume_compatible(run_dir, config)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
     stats = generate_run(
         config=config, plan=plan, run_dir=run_dir, concurrency=concurrency,
         request_timeout=request_timeout or None,
@@ -366,6 +409,104 @@ def generate(model, items, conditions, temperature, top_p, top_k, max_tokens, th
         log=lambda s: click.echo(s),
     )
     click.echo(f"next: physproofbench grade-run --run-dir {run_dir}  (on a machine with Lean)")
+    raise SystemExit(1 if stats.aborted else 0)
+
+
+@main.command("force-answer")
+@click.option("--run-dir", required=True, type=click.Path(exists=True, path_type=Path))
+@click.option("--answer-tokens", type=int, default=8192, show_default=True,
+              help="Token budget for the forced final answer.")
+@click.option("--concurrency", type=int, default=24, show_default=True,
+              help="Concurrent requests. Each re-reads a full reasoning trace, so "
+              "KV-cache use per request is large.")
+@click.option("--items", default="all", show_default=True,
+              help="Comma-separated item ids, or 'all'.")
+@click.option("--limit", type=int, default=None,
+              help="Force at most this many samples (try 1 first).")
+@click.option("--request-timeout", type=float, default=7200.0, show_default=True)
+def force_answer(run_dir, answer_tokens, concurrency, items, limit, request_timeout):
+    """Generation side (GPU node): get final answers from samples that ran
+    out of tokens while still thinking.
+
+    Appends Qwen's thinking-budget early-exit sentence and `</think>` to each
+    truncated reasoning trace and lets the model write its answer (built at
+    the token level via vLLM's /tokenize, so the chat template can't mangle
+    the unfinished turn). Needs the run's model server; never touches Lean. Grade afterwards with `grade-run` (forced
+    answers are re-graded automatically). Resumable; refuses to mix answer
+    budgets within one run.
+    """
+    from .batch import FORCE_ANSWER_PHRASE, force_answers
+
+    click.echo(f"forcing with: {FORCE_ANSWER_PHRASE!r}")
+    try:
+        stats = force_answers(
+            run_dir=run_dir, answer_tokens=answer_tokens, concurrency=concurrency,
+            request_timeout=request_timeout or None, items=_csv(items), limit=limit,
+            log=lambda s: click.echo(s),
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    raise SystemExit(1 if stats.aborted or stats.errors else 0)
+
+
+@main.command()
+@click.option("--from", "source_dir", required=True,
+              type=click.Path(exists=True, path_type=Path),
+              help="Run whose samples ran out of budget.")
+@click.option("--run-dir", required=True, type=click.Path(path_type=Path),
+              help="New run directory for the extended samples.")
+@click.option("--max-tokens", default="full", show_default=True,
+              help="New total budget per sample (tokens, counting what the source "
+              "already generated), or 'full' for the whole context window.")
+@click.option("--answer-reserve", type=int, default=8192, show_default=True,
+              help="Context always kept free so `force-answer` can still get an answer.")
+@click.option("--concurrency", type=int, default=8, show_default=True,
+              help="Long traces fill the KV cache: a full-window sample needs ~250k "
+              "tokens of it. Watch vLLM's 'GPU KV cache usage' and 'Waiting'.")
+@click.option("--items", default="all", show_default=True)
+@click.option("--samples", "-k", type=int, default=None,
+              help="Only sample indices < k of each item x condition (e.g. 1 to "
+              "measure lengths cheaply first). Default: all.")
+@click.option("--request-timeout", type=float, default=0.0, show_default=True,
+              help="Client-side seconds per request; 0 = none (a full-window "
+              "continuation can take hours).")
+def extend(source_dir, run_dir, max_tokens, answer_reserve, concurrency, items, samples,
+           request_timeout):
+    """Generation side (GPU node): continue a run's truncated reasoning with
+    a larger budget, into a new run directory.
+
+    Samples that finished within the source's budget are copied; samples
+    that ran out mid-reasoning are continued from where they stopped (a
+    continued sample is as valid as one generated in one go). Afterwards,
+    `force-answer --run-dir <new>` for any that run out again, then
+    `grade-run`. Resumable.
+    """
+    import json
+
+    from .batch import extend_run, read_plan
+    from .preflight import check_endpoint
+
+    stored = json.loads((source_dir / "config.json").read_text(encoding="utf-8"))
+    model = stored["generation"]["model"]
+    checks, max_len = check_endpoint(model, on_check=lambda c: _echo_checks([c]))
+    if not all(c.ok for c in checks):
+        raise click.ClickException("preflight failed; nothing sent.")
+    requested = _parse_max_tokens(max_tokens)
+    if requested is None:
+        prompts = list((source_dir / "prompts").glob("*.txt"))
+        longest = max((len(p.read_text(encoding="utf-8")) for p in prompts), default=0)
+        requested = _full_budget(max_len, longest, answer_reserve)
+        click.echo(f"--max-tokens full resolves to {requested} total tokens per sample")
+    try:
+        stats = extend_run(
+            source_dir=source_dir, run_dir=run_dir, max_tokens=requested,
+            answer_reserve=answer_reserve, concurrency=concurrency,
+            request_timeout=request_timeout or None, items=_csv(items), samples=samples,
+            log=lambda s: click.echo(s),
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"next: physproofbench force-answer --run-dir {run_dir}, then grade-run")
     raise SystemExit(1 if stats.aborted else 0)
 
 

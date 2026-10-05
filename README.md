@@ -128,6 +128,29 @@ physproofbench grade-run --run-dir runs/pilot --follow # or without --follow, af
 physproofbench report --run-dir runs/pilot             # rebuild summary.md any time
 ```
 
+**Thinking budgets.** Reasoning models can spend the whole budget
+thinking and never answer. In the first pilot, Qwen3.8-27B used all 32k
+tokens on every sample, without repeating itself. Two commands handle this,
+and both run on the GPU side:
+
+```bash
+# continue truncated reasoning up to the full context window, into a new run
+physproofbench extend --from runs/pilot --run-dir runs/pilot-full --samples 1   # measure first
+physproofbench extend --from runs/pilot --run-dir runs/pilot-full               # then all
+# samples that still ran out: close the reasoning and force a final answer
+physproofbench force-answer --run-dir runs/pilot-full --limit 1                 # check one
+physproofbench force-answer --run-dir runs/pilot-full
+```
+
+`extend` reuses what the source run already generated and records the new
+budget (`--max-tokens full` = context window − prompt − `--answer-reserve`)
+in the new run's config. `force-answer` appends Qwen's documented
+thinking-budget sentence plus `</think>` and records forced answers as such.
+`summary.md` counts them separately. Both build the continuation at the
+token level through vLLM's `/tokenize` endpoint, so the chat template can't
+alter the unfinished turn. A fresh run can use the whole window directly
+with `generate --max-tokens full`.
+
 Generation defaults: Qwen3-style thinking sampling (`--temperature 0.6
 --top-p 0.95 --top-k 20`), `--max-tokens 32768`, 16 concurrent requests, and
 the item's `PhysProofBench.Core` source in the prompt (`--core-in-context`).

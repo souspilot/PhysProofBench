@@ -305,3 +305,154 @@ def test_follow_waits_for_generate_to_create_the_run(tmp_path):
                       log=lambda s: None)
     gen.join()
     assert stats.graded == 1
+
+
+# --- extend / force-answer -----------------------------------------------------
+
+from physproofbench.batch import (  # noqa: E402
+    FORCE_ANSWER_PHRASE,
+    extend_run,
+    force_answers,
+    split_thinking,
+)
+
+
+class Truncating(FakeModel):
+    """Generation that always runs out of budget mid-reasoning."""
+
+    def __call__(self, prompt, **kwargs):
+        self.calls.append(kwargs)
+        return Completion(text="", model="m", finish_reason="length",
+                          reasoning=f"thinking about {len(self.calls)}",
+                          prompt_tokens=10, completion_tokens=1000, elapsed_s=1.0)
+
+
+class FakeContinuation:
+    """Stands in for openai_client.complete_continuation."""
+
+    def __init__(self, outputs):
+        self.outputs = list(outputs)  # (text, finish_reason) per call, cycled
+        self.calls = []
+        self.lock = threading.Lock()
+
+    def __call__(self, prompt, prefix, **kwargs):
+        with self.lock:
+            self.calls.append({"prompt": prompt, "prefix": prefix, **kwargs})
+            text, finish = self.outputs[(len(self.calls) - 1) % len(self.outputs)]
+        return Completion(text=text, model="m", finish_reason=finish, reasoning=None,
+                          prompt_tokens=50, completion_tokens=500, elapsed_s=2.0)
+
+
+def _truncated_source(tmp_path, samples=2):
+    src = tmp_path / "src"
+    config = GenerationConfig(model="m", max_tokens=1000)
+    plan = _plan(config, items=("SM_01_009_001",), conditions=("no_nl_proof",),
+                 samples=samples)
+    generate_run(config=config, plan=plan, run_dir=src, complete_fn=Truncating(),
+                 log=lambda s: None)
+    return src
+
+
+def test_split_thinking():
+    assert split_thinking("more</think>\n\nanswer") == ("more", "answer", True)
+    assert split_thinking("still going") == ("still going", "", False)
+
+
+def test_extend_continues_truncated_reasoning_into_new_run(tmp_path):
+    src = _truncated_source(tmp_path)
+    dst = tmp_path / "dst"
+    cont = FakeContinuation([("...so done.</think>\n\n```lean\ntheorem t : True := trivial\n```",
+                              "stop"),
+                             ("still thinking", "length")])
+    stats = extend_run(source_dir=src, run_dir=dst, max_tokens=5000, answer_reserve=300,
+                       complete_fn=cont, log=lambda s: None, concurrency=1)
+    assert stats.done == 2 and stats.copied == 0
+    call = cont.calls[0]
+    assert call["prefix"].startswith("<think>\nthinking about")
+    assert call["max_tokens"] == 4000 and call["reserve_tokens"] == 300 + 512
+    assert call["prompt"] == (src / "prompts/SM_01_009_001__no_nl_proof.txt").read_text()
+
+    answered = json.loads((dst / "samples/SM_01_009_001/no_nl_proof/000/completion.json").read_text())
+    assert answered["finish_reason"] == "stop" and answered["completion_tokens"] == 1500
+    assert answered["extended"]["closed_thinking"] is True
+    assert (dst / "samples/SM_01_009_001/no_nl_proof/000/candidate.lean").read_text() == \
+        "theorem t : True := trivial\n"
+    assert (dst / "samples/SM_01_009_001/no_nl_proof/000/reasoning.txt").read_text().endswith(
+        "...so done.")
+    still = json.loads((dst / "samples/SM_01_009_001/no_nl_proof/001/completion.json").read_text())
+    assert still["finish_reason"] == "length" and still["text"] == ""
+
+    config = json.loads((dst / "config.json").read_text())
+    assert config["generation"]["max_tokens"] == 5000
+    assert config["extended_from"]["max_tokens"] == 1000
+    # Source untouched; resume does nothing; a different budget is refused.
+    assert json.loads((src / "samples/SM_01_009_001/no_nl_proof/000/completion.json").read_text())["text"] == ""
+    again = FakeContinuation([("x", "stop")])
+    extend_run(source_dir=src, run_dir=dst, max_tokens=5000, answer_reserve=300,
+               complete_fn=again, log=lambda s: None)
+    assert again.calls == []
+    with pytest.raises(ValueError, match="max_tokens"):
+        extend_run(source_dir=src, run_dir=dst, max_tokens=9000, answer_reserve=300,
+                   complete_fn=again, log=lambda s: None)
+    with pytest.raises(ValueError, match="not larger"):
+        extend_run(source_dir=src, run_dir=tmp_path / "x", max_tokens=1000,
+                   complete_fn=again, log=lambda s: None)
+
+
+def test_extend_copies_samples_that_already_finished(tmp_path):
+    src = tmp_path / "src"
+    config = GenerationConfig(model="m", max_tokens=1000)
+    plan = _plan(config, items=("SM_01_009_001",), conditions=("no_nl_proof",), samples=1)
+    generate_run(config=config, plan=plan, run_dir=src, complete_fn=FakeModel(),
+                 log=lambda s: None)
+    cont = FakeContinuation([("x", "stop")])
+    stats = extend_run(source_dir=src, run_dir=tmp_path / "dst", max_tokens=5000,
+                       complete_fn=cont, log=lambda s: None)
+    assert stats.copied == 1 and cont.calls == []
+    assert (tmp_path / "dst/samples/SM_01_009_001/no_nl_proof/000/candidate.lean").exists()
+
+
+def test_extend_samples_limit(tmp_path):
+    src = _truncated_source(tmp_path, samples=3)
+    cont = FakeContinuation([("x</think>a", "stop")])
+    extend_run(source_dir=src, run_dir=tmp_path / "dst", max_tokens=5000, samples=1,
+               complete_fn=cont, log=lambda s: None)
+    assert len(cont.calls) == 1
+    tasks, _ = read_plan(tmp_path / "dst")
+    assert [t.index for t in tasks] == [0]
+
+
+def test_force_answers(tmp_path):
+    src = _truncated_source(tmp_path)
+    cont = FakeContinuation([("```lean\ntheorem t : True := trivial\n```", "stop")])
+    stats = force_answers(run_dir=src, answer_tokens=777, complete_fn=cont,
+                          log=lambda s: None, concurrency=1)
+    assert stats.done == 2
+    call = cont.calls[0]
+    assert call["prefix"].endswith(FORCE_ANSWER_PHRASE) and call["max_tokens"] == 777
+    record = json.loads((src / "samples/SM_01_009_001/no_nl_proof/000/completion.json").read_text())
+    assert record["forced_answer"] and record["finish_reason"] == "length"
+    assert record["text"].startswith("```lean")
+    assert (src / "samples/SM_01_009_001/no_nl_proof/000/forced.json").exists()
+    # Done ones aren't forced again; different settings are refused.
+    again = FakeContinuation([("x", "stop")])
+    force_answers(run_dir=src, answer_tokens=777, complete_fn=again, log=lambda s: None)
+    assert again.calls == []
+    with pytest.raises(ValueError, match="refusing to mix"):
+        force_answers(run_dir=src, answer_tokens=100, complete_fn=again, log=lambda s: None)
+    # Forced answers are graded (new candidate_sha), and counted in the report.
+    graded = _grade(src, FakeGrader())
+    assert graded.graded == 2
+    assert summarize(src, ITEMS)["totals"]["forced_answers"] == 2
+
+
+def test_extend_ignores_forced_answer_and_continues_the_real_trace(tmp_path):
+    src = _truncated_source(tmp_path, samples=1)
+    force_answers(run_dir=src, complete_fn=FakeContinuation([("forced", "stop")]),
+                  log=lambda s: None)
+    cont = FakeContinuation([("more</think>real answer", "stop")])
+    extend_run(source_dir=src, run_dir=tmp_path / "dst", max_tokens=5000,
+               complete_fn=cont, log=lambda s: None)
+    assert FORCE_ANSWER_PHRASE not in cont.calls[0]["prefix"]
+    record = json.loads((tmp_path / "dst/samples/SM_01_009_001/no_nl_proof/000/completion.json").read_text())
+    assert record["text"] == "real answer" and "forced_answer" not in record

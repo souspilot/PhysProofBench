@@ -97,3 +97,27 @@ pipeline, to get real model outputs to look at early. Maintainer's choices:
   boundary conditions, only one is formalized as `_001`, noted in its
   `notes.md`: Lemma 3.5 (free boundary condition only), Theorem 2.2 (part 1
   only), Theorem 3.9 (periodic volumes only).
+
+## Thinking budget protocol (after the first pilot)
+
+The first pilot (Qwen3.8-27B via vLLM, `--max-tokens 32768`, 72 samples)
+hit the budget on every sample with no answer written. The traces weren't
+degenerate: compression ratio ≈ 0.3 and mostly unique lines. The model was
+drafting and checking complete Lean proofs inside its reasoning. Decided:
+
+- **Use the full context window** where possible: `--max-tokens full` =
+  `max_model_len` − prompt − answer reserve (8192 + 512 slack by default).
+- **Never discard a paid-for trace:** `extend` continues truncated
+  reasoning into a new run with the larger budget. A continued sample is a
+  valid sample from the model (the prefix was sampled from it too). The new
+  run's config records `extended_from`.
+- **Bounded answers:** a sample that still exhausts the budget gets a
+  forced answer (`force-answer`). It appends Qwen's documented thinking-budget
+  sentence plus `</think>` and allows `answer_tokens` (8192) more. Forced
+  answers are flagged in `completion.json` and counted separately in
+  `summary.md`; whether they count toward the headline metric is still
+  open.
+- Continuations are built at the token level (vLLM `/tokenize` +
+  completions endpoint), because chat templates such as Qwen3's insert an
+  empty `<think></think>` before a final assistant message that has no
+  closing tag, which corrupts an unfinished-reasoning prefix.
