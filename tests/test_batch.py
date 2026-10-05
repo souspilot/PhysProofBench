@@ -440,6 +440,21 @@ def test_force_answers(tmp_path):
     assert again.calls == []
     with pytest.raises(ValueError, match="refusing to mix"):
         force_answers(run_dir=src, answer_tokens=100, complete_fn=again, log=lambda s: None)
+    # Raising the budget re-forces only answers that hit the old cap.
+    capped = src / "samples/SM_01_009_001/no_nl_proof/001/completion.json"
+    rec = json.loads(capped.read_text())
+    rec["forced_finish_reason"] = "length"
+    capped.write_text(json.dumps(rec))
+    bigger = FakeContinuation([("```lean\ntheorem u : True := trivial\n```", "stop")])
+    stats = force_answers(run_dir=src, answer_tokens=2000, complete_fn=bigger,
+                          log=lambda s: None)
+    assert stats.done == 1 and bigger.calls[0]["max_tokens"] == 2000
+    assert json.loads(capped.read_text())["forced_finish_reason"] == "stop"
+    settings = json.loads((src / "config.json").read_text())["forced_answer"]
+    assert settings["answer_tokens"] == 2000 and settings["upgraded_from"] == [777]
+    same = FakeContinuation([("x", "stop")])
+    force_answers(run_dir=src, answer_tokens=2000, complete_fn=same, log=lambda s: None)
+    assert same.calls == []
     # Forced answers are graded (new candidate_sha), and counted in the report.
     graded = _grade(src, FakeGrader())
     assert graded.graded == 2

@@ -617,8 +617,14 @@ def _truncated_while_thinking(record: dict) -> bool:
     )
 
 
-def _needs_forced_answer(record: dict) -> bool:
-    return _truncated_while_thinking(record) and not record.get("forced_answer")
+def _needs_forced_answer(record: dict, redo_capped: bool = False) -> bool:
+    """Truncated while thinking and not yet forced -- or, with
+    `redo_capped`, forced but cut off by the (smaller) answer budget."""
+    if not _truncated_while_thinking(record):
+        return False
+    if not record.get("forced_answer"):
+        return True
+    return redo_capped and record.get("forced_finish_reason") == "length"
 
 
 def _load_prompt(run_dir: Path, task: SampleTask, record: dict) -> str | None:
@@ -699,7 +705,12 @@ def force_answers(
     `forced.json`, and `candidate.lean` / `candidate_sha` are rewritten, so
     `grade-run` grades the forced answer. The original `finish_reason`
     ("length") is kept. Settings are recorded in `config.json` under
-    `forced_answer`; a later call with different settings is refused.
+    `forced_answer`.
+
+    Calling again with a *larger* `answer_tokens` upgrades the run: answers
+    that hit the old cap are re-forced, the rest are kept (an answer that
+    ended within the smaller budget would have ended identically with more).
+    A smaller budget, or a different phrase, is refused.
     """
     stored = _read_json(run_dir / "config.json")
     if stored is None:
@@ -709,9 +720,23 @@ def force_answers(
         raise ValueError("this run was generated with thinking disabled; nothing to force")
     settings = {"answer_tokens": answer_tokens, "phrase": FORCE_ANSWER_PHRASE}
     previous = stored.get("forced_answer")
-    if previous is not None and previous != settings:
-        raise ValueError(f"{run_dir} already has forced answers made with {previous}; "
-                         f"refusing to mix in answers made with {settings}.")
+    redo_capped = False
+    if previous is not None:
+        same_phrase = previous.get("phrase") == FORCE_ANSWER_PHRASE
+        old_tokens = previous.get("answer_tokens", 0)
+        if not same_phrase or answer_tokens < old_tokens:
+            raise ValueError(
+                f"{run_dir} already has forced answers made with {previous}; refusing to "
+                f"mix in answers made with {settings} (only raising --answer-tokens is "
+                "allowed: it re-forces the answers that hit the old cap)."
+            )
+        redo_capped = answer_tokens > old_tokens
+        if redo_capped:
+            settings["upgraded_from"] = previous.get("upgraded_from", []) + [old_tokens]
+            log(f"[force] raising the answer budget {old_tokens} -> {answer_tokens}: "
+                "re-forcing answers that hit the old cap")
+        else:
+            settings = previous
     _write_json(run_dir / "config.json", {**stored, "forced_answer": settings})
 
     tasks, _ = read_plan(run_dir)
@@ -721,7 +746,7 @@ def force_answers(
         if items and task.item_id not in items:
             continue
         record = _read_json(task.dir(run_dir) / "completion.json")
-        if record is None or not _needs_forced_answer(record):
+        if record is None or not _needs_forced_answer(record, redo_capped):
             continue
         stats.eligible += 1
         prompt = _load_prompt(run_dir, task, record)
