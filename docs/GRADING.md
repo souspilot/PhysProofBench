@@ -1,6 +1,8 @@
 # Grading contract
 
-This is the authoritative spec for how a submission is scored. The code in
+This is the authoritative spec for how a submission is scored. Current
+`grading_version`: **2** (`grading.GRADING_VERSION`; v2 = the decl-specific,
+last-message axiom parse below). The code in
 `src/physproofbench/lean/` implements it; if code and doc disagree, this doc
 wins and the code has a bug. Bumping `grading_version` (in `runs/<id>/`
 metadata) is required whenever this contract changes in a way that could move
@@ -30,6 +32,17 @@ Reject the submission before compiling if it contains, as raw text:
   rejected otherwise-valid answers. Found on a real Qwen3 run.) This is a *belt*
   check; the *braces* check is the independent L2.4 implication check below —
   text diffs alone are easy to defeat.
+
+**Statement-edit diagnostic (not a verdict).** When `statement_edited` is
+the *only* gate failure, `grade-run` (`batch.grade_run`, on by default) also
+compiles the submission, audits its axioms, and checks in the same file that
+its declaration proves the gold type (`audit.build_same_file_gold_check`).
+The result goes in `grade.json` as `statement_edit_diagnostic.would_pass`,
+and `summary.md` counts these as "edited-but-correct". The verdict stays
+`gate_fail`. The diagnostic measures how often the text gate rejects proofs
+that are correct apart from, e.g., a helper lemma placed before the theorem.
+That number decides whether to make L2.3 the statement check and relax the
+text diff.
 
 Each gate failure is recorded with a machine-readable reason
 (`gate: sorry_present`, `gate: axiom_declared`, `gate: forbidden_tactic:
@@ -74,6 +87,11 @@ For the submitted declaration `D`:
 1. **`sorry` closure.** `D` must be `sorry`-free, transitively. Checked via
    `#print axioms D` and confirming `sorryAx` does not appear in the
    printed axiom list.
+   The harness appends its own `#print axioms D` after the submission and
+   reads only the **last** message naming `D`. Any earlier message, such as a
+   model's own `#print axioms` on a helper or a printed string imitating the
+   format, is ignored. Matching any occurrence, as `grading_version` 1 did,
+   would let a submission forge a clean audit.
 2. **Axiom audit.** The printed axiom set must be a subset of
    `{propext, Classical.choice, Quot.sound}` (Lean 4 / Mathlib's standard
    three). Anything else fails. `#print axioms D` is transitive over `D`'s

@@ -17,7 +17,6 @@ import functools
 import os
 import platform
 import re
-import resource
 import shutil
 import subprocess
 import tempfile
@@ -26,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DEFAULT_TIMEOUT_S = 300.0
-DEFAULT_MEMORY_CAP_BYTES = 8 * 1024 * 1024 * 1024  # 8 GiB
+DEFAULT_MEMORY_CAP_BYTES = 32 * 1024 * 1024 * 1024  # 32 GiB virtual; see _memory_cap_wrapper
 
 # elan's default install location. `lake` may not be on PATH even when
 # installed (observed: some subprocess environments don't inherit the shell
@@ -118,26 +117,39 @@ class CompileResult:
     returncode: int | None
 
 
-def _memory_cap_preexec(memory_cap_bytes: int):
-    # RLIMIT_AS is flaky-to-broken on macOS (setrlimit reliably raises
-    # "current limit exceeds maximum limit" even though getrlimit reports
-    # both limits as unlimited -- a longstanding Darwin quirk, not a bug in
-    # this code). Enforce it only on Linux; rely on the wall-clock timeout
-    # elsewhere on macOS. Revisit if this is ever run in CI on Linux, where
-    # it should work and should be turned on for real.
-    if platform.system() != "Linux":
-        return None
+def _memory_cap_wrapper(base: list[str], memory_cap_bytes: int | None) -> list[str]:
+    """Prefix `base` with a shell `ulimit -v` when a memory cap applies.
 
-    def _set_limits() -> None:
-        resource.setrlimit(resource.RLIMIT_AS, (memory_cap_bytes, memory_cap_bytes))
+    Linux only: RLIMIT_AS is flaky-to-broken on macOS (setrlimit reliably
+    raises "current limit exceeds maximum limit" even though getrlimit
+    reports both limits as unlimited -- a longstanding Darwin quirk), so
+    there we rely on the wall-clock timeout.
 
-    return _set_limits
+    Done with a `bash -c 'ulimit -v ...; exec ...'` wrapper rather than
+    `subprocess`'s `preexec_fn`, which Python documents as unsafe when the
+    parent has threads -- and the batch runner grades from a thread pool.
+
+    The cap limits *virtual* address space, and a Lean process importing all
+    of Mathlib maps several GB of `.olean` files, so caps that look generous
+    for resident memory can still fail the compile spuriously.
+    `physproofbench preflight` compiles a real `import Mathlib` file under the
+    same cap to catch that before a run.
+    """
+    if not memory_cap_bytes or platform.system() != "Linux":
+        return base
+    kib = memory_cap_bytes // 1024
+    return ["bash", "-c", f'ulimit -v {kib} && exec "$@"', "lean-sandbox", *base]
 
 
 def _build_command(
-    lean_bin: str, file_path: Path, *, lean_project_dir: Path, no_network: bool
+    lean_bin: str,
+    file_path: Path,
+    *,
+    lean_project_dir: Path,
+    no_network: bool,
+    memory_cap_bytes: int | None = None,
 ) -> list[str]:
-    base = [lean_bin, str(file_path)]
+    base = _memory_cap_wrapper([lean_bin, str(file_path)], memory_cap_bytes)
     if no_network and platform.system() == "Darwin":
         with tempfile.NamedTemporaryFile(mode="w", suffix=".sb", delete=False) as f:
             f.write(_SANDBOX_PROFILE)
@@ -158,7 +170,7 @@ def compile_file(
     file_path: Path,
     *,
     timeout: float = DEFAULT_TIMEOUT_S,
-    memory_cap_bytes: int = DEFAULT_MEMORY_CAP_BYTES,
+    memory_cap_bytes: int | None = DEFAULT_MEMORY_CAP_BYTES,
     no_network: bool = True,
 ) -> CompileResult:
     """Compile `file_path` against `lean_project_dir`'s resolved environment.
@@ -179,7 +191,11 @@ def compile_file(
             f"`lake env` at {lean_project_dir} did not report a LEAN binary path"
         )
     command = _build_command(
-        lean_bin, file_path, lean_project_dir=lean_project_dir, no_network=no_network
+        lean_bin,
+        file_path,
+        lean_project_dir=lean_project_dir,
+        no_network=no_network,
+        memory_cap_bytes=memory_cap_bytes,
     )
     child_env = {**os.environ, **env_vars}
     start = time.monotonic()
@@ -192,7 +208,6 @@ def compile_file(
             text=True,
             timeout=timeout,
             stdin=subprocess.DEVNULL,
-            preexec_fn=_memory_cap_preexec(memory_cap_bytes),
         )
     except subprocess.TimeoutExpired as exc:
         elapsed = time.monotonic() - start
