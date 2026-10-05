@@ -1,6 +1,8 @@
 # Grading contract
 
-This is the authoritative spec for how a submission is scored. The code in
+This is the authoritative spec for how a submission is scored. Current
+`grading_version`: **2** (`grading.GRADING_VERSION`; v2 = the decl-specific,
+last-message axiom parse below). The code in
 `src/physproofbench/lean/` implements it; if code and doc disagree, this doc
 wins and the code has a bug. Bumping `grading_version` (in `runs/<id>/`
 metadata) is required whenever this contract changes in a way that could move
@@ -21,13 +23,26 @@ Reject the submission before compiling if it contains, as raw text:
   disables a check — at minimum `debug.skipKernelTC`
 - (`proof` mode only) any edit to the statement region: the submission is
   diffed against the item file up to its `:= by` marker. The diff ignores
-  comments (including docstrings) and whitespace, but nothing else: an added
-  `import`, `open`, or `def` before the theorem still counts as an edit, since
-  it could change what the statement means. (Models routinely drop or
+  comments (including docstrings), whitespace, and extra `import Mathlib[.…]`
+  lines (which only add declarations and are added by nearly every model),
+  but nothing else: any other added `import`, an added `open`, or a `def`
+  before the theorem still counts as an edit, since it could change what the
+  statement means. (Models routinely drop or
   rewrite the item's tag comments and docstring; a comment-sensitive diff
   rejected otherwise-valid answers. Found on a real Qwen3 run.) This is a *belt*
   check; the *braces* check is the independent L2.4 implication check below —
   text diffs alone are easy to defeat.
+
+**Statement-edit diagnostic (not a verdict).** When `statement_edited` is
+the *only* gate failure, `grade-run` (`batch.grade_run`, on by default) also
+compiles the submission, audits its axioms, and checks in the same file that
+its declaration proves the gold type (`audit.build_same_file_gold_check`).
+The result goes in `grade.json` as `statement_edit_diagnostic.would_pass`,
+and `summary.md` counts these as "edited-but-correct". The verdict stays
+`gate_fail`. The diagnostic measures how often the text gate rejects proofs
+that are correct apart from, e.g., a helper lemma placed before the theorem.
+That number decides whether to make L2.3 the statement check and relax the
+text diff.
 
 Each gate failure is recorded with a machine-readable reason
 (`gate: sorry_present`, `gate: axiom_declared`, `gate: forbidden_tactic:
@@ -47,6 +62,13 @@ see `docs/SOURCE.md` / `lean/lakefile.toml`), in a sandbox with:
 
 Record: exit status, stderr, elapsed time, and the full diagnostic list.
 
+Setup requirement: the precompiled Mathlib cache (`lake exe cache get`) does not
+include the umbrella `Mathlib.olean`, so a submission containing a bare
+`import Mathlib` (which the prompt invites, and nearly every model writes) fails
+L1 with "object file ... Mathlib.olean of module Mathlib does not exist"
+regardless of its proof. Build it once per environment with `lake build
+Mathlib` (about 75 seconds locally, after the cache is populated).
+
 Implementation note: the submission is compiled with the raw `lean` binary,
 not `lake env lean <file>`. The Lake environment (`LEAN_PATH` and friends) is
 resolved once per workspace via a bare `lake env` (`sandbox.resolve_lake_env`)
@@ -65,6 +87,11 @@ For the submitted declaration `D`:
 1. **`sorry` closure.** `D` must be `sorry`-free, transitively. Checked via
    `#print axioms D` and confirming `sorryAx` does not appear in the
    printed axiom list.
+   The harness appends its own `#print axioms D` after the submission and
+   reads only the **last** message naming `D`. Any earlier message, such as a
+   model's own `#print axioms` on a helper or a printed string imitating the
+   format, is ignored. Matching any occurrence, as `grading_version` 1 did,
+   would let a submission forge a clean audit.
 2. **Axiom audit.** The printed axiom set must be a subset of
    `{propext, Classical.choice, Quot.sound}` (Lean 4 / Mathlib's standard
    three). Anything else fails. `#print axioms D` is transitive over `D`'s

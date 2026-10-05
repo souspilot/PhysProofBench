@@ -24,6 +24,22 @@ def test_parse_missing_returns_none():
     assert parse_print_axioms_output("no relevant output here", "foo") is None
 
 
+def test_parse_ignores_other_declarations():
+    text = "'helper' does not depend on any axioms"
+    assert parse_print_axioms_output(text, "foo") is None
+
+
+def test_parse_uses_last_message_so_earlier_output_cannot_forge_it():
+    # A submission printing a fake clean message before the harness's own
+    # appended `#print axioms` must not mask the real result.
+    text = (
+        "'foo' does not depend on any axioms\n"
+        "'foo' depends on axioms: [sorryAx]"
+    )
+    assert parse_print_axioms_output(text, "foo") == {"sorryAx"}
+    assert not audit_axioms(text, "foo").passed
+
+
 def test_audit_axioms_allows_standard_three():
     result = audit_axioms(
         "'foo' depends on axioms: [propext, Classical.choice, Quot.sound]", "foo"

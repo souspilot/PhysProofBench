@@ -39,6 +39,17 @@ def test_bad_id_pattern_rejected():
         ItemMeta.model_validate(data)
 
 
+@pytest.mark.parametrize("item_id", ["SM_01_E06_001", "SM_02_Q11_001"])
+def test_exercise_and_equation_ids_accepted(item_id):
+    assert ItemMeta.model_validate(dict(BASE, id=item_id)).id == item_id
+
+
+@pytest.mark.parametrize("item_id", ["SM_01_X06_001", "SM_01_E6_001", "SM_01_E006_001"])
+def test_malformed_item_numbers_rejected(item_id):
+    with pytest.raises(ValidationError):
+        ItemMeta.model_validate(dict(BASE, id=item_id))
+
+
 def test_active_requires_two_reviewers():
     data = dict(BASE, status="active", reviewed_by=["alice"])
     with pytest.raises(ValidationError):

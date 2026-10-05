@@ -146,19 +146,7 @@ def run_item_once(
         mode="proof",
     )
     (run_dir / "grade.json").write_text(
-        json.dumps(
-            {
-                "verdict": report.verdict,
-                "gate_failures": report.gate.failures,
-                "compile_ok": report.compile.ok if report.compile else None,
-                "axioms": report.axiom_audit.axioms if report.axiom_audit else None,
-                "audit_failures": (
-                    report.axiom_audit.failures if report.axiom_audit else []
-                ),
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
+        json.dumps(report.to_dict(), indent=2), encoding="utf-8"
     )
 
     return RunResult(

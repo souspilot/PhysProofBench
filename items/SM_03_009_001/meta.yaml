@@ -1,0 +1,41 @@
+id: SM_03_009_001
+schema_version: 1
+status: draft
+source:
+  book: SM
+  chapter: 3
+  item_label: Theorem 3.9
+  pages:
+  - 90
+  - 91
+topic:
+- statistical-mechanics
+- ising-model
+- one-dimensional
+- transfer-matrix
+- pressure
+proof_kind: approximation
+approximation:
+  flavor: disguised_limit
+  encoding: asymptotic
+hidden_assumptions: []
+lean_file: lean/PhysProofBench/Items/SM_03_009_001.lean
+decl_name: isingChain_pressure_formula
+solution_file: lean/PhysProofBenchSolutions/SM_03_009_001.lean
+imports_physlib: false
+modes:
+- proof
+- autoform
+nl:
+  statement: nl.md#statement
+  proof: nl.md#proof
+difficulty:
+  decl_count: 25
+  band: large
+depends_on: []
+core_deps:
+- PhysProofBench.Core.Spin
+- PhysProofBench.Core.Ising
+library_gaps: []
+contributed_by: harshitbiitk@gmail.com
+reviewed_by: []

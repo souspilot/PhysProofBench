@@ -78,9 +78,18 @@ def strip_lean_comments(text: str) -> str:
     return "".join(out)
 
 
+# Extra `import Mathlib` / `import Mathlib.Foo.Bar` lines only add
+# declarations to the environment; they cannot redefine or shadow anything the
+# gold statement depends on, and models add them routinely (the prompt says
+# "using Mathlib"). Any other added import still counts as an edit.
+_MATHLIB_IMPORT = re.compile(r"(?<![\w.])import Mathlib(?:\.[\w.]+)*(?![\w.])")
+
+
 def _canonical(text: str) -> str:
-    """Comment- and whitespace-insensitive form, for comparing statements."""
-    return " ".join(strip_lean_comments(text).split())
+    """Comment-, whitespace- and Mathlib-import-insensitive form, for
+    comparing statements."""
+    stripped = _MATHLIB_IMPORT.sub(" ", strip_lean_comments(text))
+    return " ".join(stripped.split())
 
 
 def _statement_prefix(text: str) -> str | None:

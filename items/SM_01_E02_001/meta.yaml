@@ -1,0 +1,43 @@
+id: SM_01_E02_001
+schema_version: 1
+status: draft
+source:
+  book: SM
+  chapter: 1
+  item_label: Exercise 1.2
+  pages:
+  - 8
+topic:
+- thermodynamics
+- entropy
+- concavity
+proof_kind: hidden_assumption
+hidden_assumptions:
+- id: superadditivity
+  kind: modeling
+  lean: ∀ X ∈ PosOrthant, ∀ Y ∈ PosOrthant, S X + S Y ≤ S (X + Y)
+  justification: source_implied
+  note: Follows from the extremum principle (removing an internal wall relaxes a constraint, so the maximized total entropy cannot drop), but the source never states it as a property of S.
+- id: positive_orthant
+  kind: domain
+  lean: PosOrthant
+  justification: encoding_artifact
+  note: As in SM_01_E01_001.
+lean_file: lean/PhysProofBench/Items/SM_01_E02_001.lean
+decl_name: entropy_concave
+solution_file: lean/PhysProofBenchSolutions/SM_01_E02_001.lean
+imports_physlib: false
+modes:
+- proof
+- autoform
+nl:
+  statement: nl.md#statement
+difficulty:
+  decl_count: 3
+  band: small
+depends_on: []
+core_deps:
+- PhysProofBench.Core.Thermo
+library_gaps: []
+contributed_by: harshitbiitk@gmail.com
+reviewed_by: []

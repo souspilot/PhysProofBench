@@ -12,7 +12,7 @@ library-in-context ablation is on), `{candidate_lean}`, `{candidate_nl}`.
 
 ## `proof` mode
 
-### A1 — `no_nl_proof` (v1)
+### A1 — `no_nl_proof` (v2)
 
 ```
 You are given a Lean 4 theorem statement from a physics textbook. Prove it.
@@ -25,13 +25,13 @@ source, if included below}.
 ```lean
 {gold_statement_lean}
 ```
-{core_source, if library-in-context is on}
+{core_block, if library-in-context is on -- see below}
 
 Reply with a single ```lean fenced code block containing the complete file
 (imports through the closed proof). No commentary outside the code block.
 ```
 
-### A2 — `with_nl_proof` (v1)
+### A2 — `with_nl_proof` (v2)
 
 Same as A1, with this paragraph inserted before the statement:
 
@@ -42,6 +42,24 @@ you do not have to follow it exactly.
 
 {nl_proof}
 ```
+
+`{core_block}` (v2), when library-in-context is on:
+
+```
+The statement uses definitions from the PhysProofBench.Core modules below.
+They are already compiled and importable; do not copy or redefine them in your
+answer.
+
+```lean
+{core_source}
+```
+```
+
+`{core_source}` is the source of the item's `core_deps` modules and every
+`PhysProofBench.*` module they import, dependencies first, each under a
+`-- File: lean/<path>` header (`render.load_core_source`). `physproofbench generate`
+turns library-in-context **on by default** (`--core-in-context`): without it
+the model sees names like `cwProb` but never their definitions.
 
 ## `autoform` mode
 
@@ -119,3 +137,10 @@ Reply as JSON: {{"fq": int, "fq_reason": str, "lp": int, "lp_reason": str,
 
 - v1 (this file, initial): first frozen templates, written alongside the M0
   skeleton. No runs have used these yet, so no invalidation history.
+- v2: the A1/A2 `{core_source}` block gets a one-paragraph header saying the
+  Core modules are already importable and must not be redefined. In v1 the
+  Core source was pasted bare after the statement, which invites a model to
+  copy the definitions into its answer: that fails L1 (duplicate
+  declarations) or the L0 statement gate. Prompts without Core source are
+  textually unchanged. No runs had used v1 with Core source in context, so
+  nothing is invalidated.

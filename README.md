@@ -73,6 +73,13 @@ which needs no network at all. Also closed `subprocess.run`'s `stdin`
 (`DEVNULL`) — left open, it caused `lake env lean` to hang when invoked from
 Python (as opposed to an interactive shell) at all, sandboxed or not.
 
+Item set: **12 items** from chapters 1–3 (`items/`), 4 each of
+`proof_kind` `exact`, `approximation` and `hidden_assumption`, all `status:
+draft`. All 12 gold statements compile (`lake build PhysProofBench`), but
+only the seed `SM_01_009_001` has a reference proof so far; the other 11 are
+statement-only. See `docs/DECISIONS.md` ("First item batch") and
+`docs/SOURCE.md`'s coverage table.
+
 Not yet built: M1's ingestion/report/judge machinery
 (`src/physproofbench/{ingest,judge}/` are empty directories reserving the
 layout from `plan.md` §3; `report.py` doesn't exist; only A1/A2 proof-mode
@@ -81,6 +88,56 @@ checking is implemented (`lean/audit.py`) and tested end-to-end, but not yet
 wired automatically into `grading.py` (see its docstring). No chapter has
 been censused. See `plan.md` for the full milestone list and
 `docs/DECISIONS.md` for choices made so far.
+
+## Running a batch (pilot study)
+
+A batch run has two phases, run as separate commands so GPU time is never
+spent waiting on Lean:
+
+- **`physproofbench generate`** (GPU side) sends every item × condition ×
+  sample to an OpenAI-compatible server (e.g. vLLM). It needs no Lean.
+- **`physproofbench grade-run`** (CPU side) grades the stored completions
+  with Lean. It never calls a model.
+
+They communicate only through the run directory (layout in
+`src/physproofbench/batch.py`). They can run on different nodes sharing a
+filesystem, one after the other, or at the same time: `grade-run --follow`
+grades samples as they land and stops once generation finishes. Both phases
+save each sample as it completes and skip finished work, so re-running the
+**same command** resumes after a crash, Ctrl-C or a dead server. `generate`
+refuses to mix in samples made with different settings, and `grade-run`
+refuses to grade an item whose gold statement differs in its checkout from
+the one the model was shown.
+
+GPU side (Python ≥ 3.11, no Lean needed):
+
+```bash
+pip install -e .
+export OPENAI_BASE_URL=http://localhost:8000/v1   # no API key needed for local vLLM
+physproofbench preflight --model <served-model-name>   # server, model name, context budget
+physproofbench generate --model <served-model-name> --run-dir runs/pilot -k 4
+```
+
+CPU side (same commit of this repo, Lean installed):
+
+```bash
+pip install -e .
+cd lean && lake exe cache get && lake build Mathlib PhysProofBench && cd ..
+physproofbench lean-check                              # env + one real compile, timed
+physproofbench grade-run --run-dir runs/pilot --follow # or without --follow, after generate
+physproofbench report --run-dir runs/pilot             # rebuild summary.md any time
+```
+
+Generation defaults: Qwen3-style thinking sampling (`--temperature 0.6
+--top-p 0.95 --top-k 20`), `--max-tokens 32768`, 16 concurrent requests, and
+the item's `PhysProofBench.Core` source in the prompt (`--core-in-context`).
+`generate` re-checks the server and context budget before sending anything,
+and `--dry-run` writes the prompts without sending anything. Grading
+defaults: 2 parallel Lean compiles (`--grade-workers`), `--compile-timeout
+300`. `grade-run --regrade-timeouts` re-grades timed-out compiles after
+raising the timeout. `<run-dir>/summary.md` reports pass@1/pass@k per item
+and condition, verdict breakdowns, truncations, and how many gate rejections
+were otherwise-correct proofs (`docs/GRADING.md`, statement-edit diagnostic).
 
 ## License
 

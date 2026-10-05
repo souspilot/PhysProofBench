@@ -11,8 +11,6 @@ from dataclasses import dataclass, field
 ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 SORRY_AXIOM = "sorryAx"
 
-_NO_AXIOMS_PATTERN = re.compile(r"does not depend on any axioms")
-_DEPENDS_ON_PATTERN = re.compile(r"depends on axioms:\s*\[([^\]]*)\]")
 
 _OPEN_TO_CLOSE = {"(": ")", "{": "}", "[": "]"}
 _CLOSE_CHARS = set(_OPEN_TO_CLOSE.values())
@@ -32,18 +30,28 @@ def parse_print_axioms_output(text: str, decl_name: str) -> set[str] | None:
     `text` (e.g. the compile failed before reaching the `#print axioms`
     command).
 
+    Only messages naming `decl_name` count, and only the *last* one: the
+    harness appends its own `#print axioms` after the submission, so its
+    output comes last. Anything earlier (a model's own `#print axioms` on a
+    helper, or a printed string imitating the message) is ignored -- matching
+    any occurrence would let a submission forge a clean audit.
+
     Known Lean 4 output shapes (VERIFY against the pinned toolchain if this
-    ever stops matching — see docs/GRADING.md L2.2):
+    ever stops matching -- see docs/GRADING.md L2.2):
       "'decl' does not depend on any axioms"
       "'decl' depends on axioms: [propext, Classical.choice]"
     """
-    if _NO_AXIOMS_PATTERN.search(text):
-        return set()
-    match = _DEPENDS_ON_PATTERN.search(text)
-    if match is None:
+    pattern = re.compile(
+        "'" + re.escape(decl_name) + "'"
+        + r" (?:does not depend on any axioms|depends on axioms:\s*\[([^\]]*)\])"
+    )
+    matches = list(pattern.finditer(text))
+    if not matches:
         return None
-    names = [n.strip() for n in match.group(1).split(",") if n.strip()]
-    return set(names)
+    listed = matches[-1].group(1)
+    if listed is None:
+        return set()
+    return {n.strip() for n in listed.split(",") if n.strip()}
 
 
 def audit_axioms(compile_output: str, decl_name: str) -> AxiomAuditResult:
@@ -253,3 +261,28 @@ def build_statement_preservation_source(
         f"import {submission_module}\n\n"
         f"{header} : {sig.result_type} := {applied}\n"
     )
+
+
+_OPEN_LINE = re.compile(r"(?m)^open\s+(.+?)\s*$")
+
+
+def build_same_file_gold_check(gold_text: str, decl_name: str) -> str:
+    """Lean source to *append* to a submission: an `example` stating the
+    gold's type and closing it with the submission's `decl_name`.
+
+    A lighter, same-file cousin of `build_statement_preservation_source`,
+    used only as a diagnostic for submissions the L0 text gate rejected as
+    `statement_edited` (typically: a helper lemma added before the theorem).
+    Not a verdict: the gold type is elaborated after the submission's own
+    declarations, so a submission that shadows a name the gold uses could
+    still mislead it. The gold's `open` lines are re-applied with `open ...
+    in`, so a submission that dropped them is not penalized for it.
+    """
+    sig = parse_theorem_signature(gold_text, decl_name)
+    opens = _OPEN_LINE.findall(gold_text[: _find_decl_start(gold_text, decl_name)])
+    binders = " ".join(sig.binder_groups)
+    args = " ".join(sig.explicit_arg_names)
+    applied = decl_name + (f" {args}" if args else "")
+    prefix = "".join(f"open {o} in\n" for o in opens)
+    header = f"example {binders}".rstrip()
+    return f"\n\n{prefix}{header} : {sig.result_type} := {applied}\n"

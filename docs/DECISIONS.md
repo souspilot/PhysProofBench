@@ -27,8 +27,16 @@ matters).
 4. **Prover-assisted bridging (L3 step 3) in the headline config?** Open —
    not exercised until M1's bridge-check implementation.
 
-5. **Fixed vs. free `approximation` encoding per item?** Open — no
-   `proof_kind: approximation` item exists yet.
+5. **Fixed vs. free `approximation` encoding per item?** Decided for the
+   first batch: the **gold encoding is fixed per item** and recorded in
+   `approximation.encoding`, and encodings are deliberately **varied across
+   items**. The four approximation items use `asymptotic`/`IsBigO`
+   (`SM_01_Q43_001`), `error_bound` (`SM_02_Q11_001`), `model_substitution`
+   (`SM_02_002_001`) and `asymptotic`/`Tendsto` (`SM_03_009_001`). Whether an
+   *autoform* submission may pick a different encoding and still count as
+   `equivalent` is still open, since L3 isn't built. No `Core/Approx.lean` was
+   needed: Mathlib's `Asymptotics.IsBigO` and `Filter.Tendsto` sufficed, and
+   the error-bound item states its bound directly.
 
 6. **Public data licence.** Open — deferred to M4 per `plan.md`.
 
@@ -64,3 +72,28 @@ ambiguity — it's a clean analysis fact used to motivate the microcanonical
 ensemble), and its proof (Jensen's inequality on the concave map
 `x ↦ -x log x`) is realistic to formalize `sorry`-free against Mathlib.
 See `items/SM_01_009_001/` and `docs/SOURCE.md`.
+
+## First item batch (12 items, statement-first)
+
+Grew the benchmark from the one seed item to 12, before building more
+pipeline, to get real model outputs to look at early. Maintainer's choices:
+
+- **Mix:** 4 each of `proof_kind` `exact`, `approximation`,
+  `hidden_assumption` (the seed counts as one `exact`). `mixed` not yet used.
+- **Statements first:** each new item has a compiling gold statement (with
+  `sorry`), `meta.yaml`, `nl.md` and `notes.md`, but **no reference proof**
+  yet. Consequences: `difficulty.decl_count` is an estimate (flagged in each
+  `notes.md`), and a false or unprovable gold statement would not have been
+  caught by a proof. Every statement was sanity-checked numerically where
+  applicable while drafting (see each `notes.md`), which reduces that risk
+  without removing it.
+- **Chapters 1–3 only**, to keep `Core` small. New `Core` modules:
+  `Spin`, `Ising`, `CurieWeiss`, `LatticeGas`, `Thermo`.
+- **Exercises have no `nl.proof`.** The source gives no proof for its
+  exercises (or for eqn. (2.11)), so per `plan.md` §4 `nl.proof` is omitted
+  there, and those 6 items (`E01`, `E02`, `E03`, `E05`, `E06`, `Q11`) run
+  only in the `no_nl_proof` conditions.
+- **Partial items:** where a source result has several independent parts or
+  boundary conditions, only one is formalized as `_001`, noted in its
+  `notes.md`: Lemma 3.5 (free boundary condition only), Theorem 2.2 (part 1
+  only), Theorem 3.9 (periodic volumes only).

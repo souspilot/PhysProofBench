@@ -1,0 +1,45 @@
+id: SM_01_E03_001
+schema_version: 1
+status: draft
+source:
+  book: SM
+  chapter: 1
+  item_label: Exercise 1.3
+  pages:
+  - 11
+  - 12
+topic:
+- thermodynamics
+- free-energy
+- legendre-transform
+- convexity
+proof_kind: hidden_assumption
+hidden_assumptions:
+- id: finite_infimum
+  kind: domain
+  lean: '∀ β > 0, ∀ V > 0, ∀ N > 0, BddBelow (Set.range fun U : Set.Ioi (0 : ℝ) => β * (U : ℝ) - S ((U : ℝ), V, N))'
+  justification: source_implied
+  note: 'The source asserts the infimum defining F̂ is attained where ∂S/∂U = β, which presupposes it is finite. Without this, F̂ = -∞ (in Lean: a junk value) and neither conclusion holds.'
+- id: energy_positive
+  kind: domain
+  lean: '⨅ U : Set.Ioi (0 : ℝ), ...'
+  justification: encoding_artifact
+  note: The source leaves the range of U in the infimum implicit; we take U > 0, matching PosOrthant.
+lean_file: lean/PhysProofBench/Items/SM_01_E03_001.lean
+decl_name: freeEnergyHat_concave_convex
+solution_file: lean/PhysProofBenchSolutions/SM_01_E03_001.lean
+imports_physlib: false
+modes:
+- proof
+- autoform
+nl:
+  statement: nl.md#statement
+difficulty:
+  decl_count: 8
+  band: moderate
+depends_on: []
+core_deps:
+- PhysProofBench.Core.Thermo
+library_gaps: []
+contributed_by: harshitbiitk@gmail.com
+reviewed_by: []

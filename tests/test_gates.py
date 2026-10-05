@@ -96,8 +96,23 @@ def test_shadowing_definition_before_theorem_is_still_a_statement_edit():
     assert "gate: statement_edited" in r.failures
 
 
-def test_added_import_is_still_a_statement_edit():
-    sub = GOLD_WITH_COMMENTS.replace("import Foo\n", "import Foo\nimport Mathlib\n").replace("sorry", "rfl")
+def test_added_mathlib_imports_are_not_a_statement_edit():
+    for extra in ("import Mathlib\n", "import Mathlib.Analysis.Convex.Jensen\n"):
+        sub = GOLD_WITH_COMMENTS.replace("import Foo\n", extra + "import Foo\n").replace("sorry", "rfl")
+        assert check_gates(sub, mode="proof", gold_text=GOLD_WITH_COMMENTS).passed, extra
+
+
+def test_added_non_mathlib_import_is_still_a_statement_edit():
+    for extra in ("import Bar\n", "import MathlibExtras\n", "import Batteries\n"):
+        sub = GOLD_WITH_COMMENTS.replace("import Foo\n", "import Foo\n" + extra).replace("sorry", "rfl")
+        r = check_gates(sub, mode="proof", gold_text=GOLD_WITH_COMMENTS)
+        assert "gate: statement_edited" in r.failures, extra
+
+
+def test_mathlib_import_does_not_excuse_a_shadowing_definition():
+    sub = GOLD_WITH_COMMENTS.replace("import Foo\n", "import Mathlib\nimport Foo\n").replace(
+        "open Foo\n", "open Foo\ndef Bar := 1\n"
+    ).replace("sorry", "rfl")
     r = check_gates(sub, mode="proof", gold_text=GOLD_WITH_COMMENTS)
     assert "gate: statement_edited" in r.failures
 

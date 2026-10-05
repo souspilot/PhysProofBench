@@ -8,8 +8,10 @@ implemented here so far.
 from __future__ import annotations
 
 import hashlib
+import re
+from pathlib import Path
 
-TEMPLATE_VERSION = "v1"
+TEMPLATE_VERSION = "v2"
 
 _A1 = """\
 You are given a Lean 4 theorem statement from a physics textbook. Prove it.
@@ -25,6 +27,16 @@ that typechecks against the statement below, using Mathlib{core_note}.
 
 Reply with a single ```lean fenced code block containing the complete file
 (imports through the closed proof). No commentary outside the code block.
+"""
+
+_CORE_BLOCK = """\
+The statement uses definitions from the PhysProofBench.Core modules below.
+They are already compiled and importable; do not copy or redefine them in your
+answer.
+
+```lean
+{core_source}
+```
 """
 
 _A2_NL_PARAGRAPH = """\
@@ -66,7 +78,7 @@ def render_proof_prompt(
         raise ValueError("condition 'with_nl_proof' requires nl_proof")
 
     core_note = " + PhysProofBench.Core source, if included below" if core_source else ""
-    core_source_block = f"```lean\n{core_source}\n```\n" if core_source else ""
+    core_source_block = _CORE_BLOCK.format(core_source=core_source) if core_source else ""
     prompt = _A1.format(
         gold_statement_lean=gold_statement_lean,
         core_note=core_note,
@@ -82,3 +94,43 @@ def render_proof_prompt(
 def template_hash(rendered_prompt: str) -> str:
     """Hash stored in run metadata (docs/PROMPTS.md's versioning contract)."""
     return hashlib.sha256(rendered_prompt.encode("utf-8")).hexdigest()[:16]
+
+
+_PROJECT_IMPORT = re.compile(r"(?m)^import\s+(PhysProofBench\.[\w.]+)\s*$")
+
+
+def _module_path(lean_project_dir: Path, module: str) -> Path:
+    return lean_project_dir / Path(*module.split(".")).with_suffix(".lean")
+
+
+def load_core_source(lean_project_dir: Path, modules: list[str]) -> str:
+    """Source of `modules` and every `PhysProofBench.*` module they import,
+    dependencies first, each under a `-- File: <path>` header.
+
+    This is the `{core_source}` placeholder of docs/PROMPTS.md (the
+    library-in-context ablation). Without it a model sees only names like
+    `cwProb` or `isingPressureFree` in the gold statement, never their
+    definitions, so most items are unprovable for reasons that have nothing
+    to do with theorem proving.
+    """
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def visit(module: str) -> None:
+        if module in seen:
+            return
+        seen.add(module)
+        path = _module_path(lean_project_dir, module)
+        text = path.read_text(encoding="utf-8")
+        for dep in _PROJECT_IMPORT.findall(text):
+            visit(dep)
+        ordered.append(module)
+
+    for module in modules:
+        visit(module)
+    blocks = []
+    for module in ordered:
+        rel = _module_path(Path("."), module).as_posix()
+        text = _module_path(lean_project_dir, module).read_text(encoding="utf-8")
+        blocks.append(f"-- File: lean/{rel}\n{text.strip()}")
+    return "\n\n".join(blocks)

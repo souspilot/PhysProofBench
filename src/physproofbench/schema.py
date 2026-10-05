@@ -9,7 +9,10 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
-ID_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*_\d{2}_\d{3}_\d{3}$")
+# <ITEM> is the book's own chapter-local number (`009` = Lemma 1.9), or
+# `E<nn>` for an exercise / `Q<nn>` for a result stated at a numbered equation
+# in running text -- see docs/SOURCE.md's id-convention subsection.
+ID_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*_\d{2}_(?:\d{3}|[EQ]\d{2})_\d{3}$")
 
 Status = Literal["active", "draft", "retired", "semiformal"]
 ProofKind = Literal["exact", "approximation", "hidden_assumption", "mixed"]
