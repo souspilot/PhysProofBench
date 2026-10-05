@@ -302,6 +302,10 @@ def generate_run(
     # Keep other keys (e.g. `forced_answer`) when extending a run.
     _write_json(run_dir / "config.json",
                 {**(_read_json(run_dir / "config.json") or {}), "generation": asdict(config)})
+    # Mark the run as generating *before* publishing plan.json: a grader
+    # following this run starts as soon as plan.json exists, and would exit
+    # at once if it saw no "generating" status.
+    _set_status(run_dir, GENERATING, planned=len(plan.tasks))
     _write_plan(run_dir, plan)
     for (item_id, cond), prompt in plan.prompts.items():
         _atomic_write(run_dir / "prompts" / f"{item_id}__{cond}.txt", prompt.text)
@@ -875,6 +879,7 @@ def extend_run(
              if (not items or t.item_id in items) and (samples is None or t.index < samples)]
     plan = Plan(tasks=tasks, prompts={}, metas={},
                 gold_shas={i: s for i, s in gold_shas.items() if any(t.item_id == i for t in tasks)})
+    _set_status(run_dir, GENERATING, planned=len(tasks))  # before plan.json; see generate_run
     _write_plan(run_dir, plan)
     for item_id, cond in {(t.item_id, t.condition) for t in tasks}:
         name = f"{item_id}__{cond}.txt"

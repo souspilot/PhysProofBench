@@ -151,6 +151,22 @@ token level through vLLM's `/tokenize` endpoint, so the chat template can't
 alter the unfinished turn. A fresh run can use the whole window directly
 with `generate --max-tokens full`.
 
+**Compiler-feedback repair.** A graded run can be continued with up to
+`--rounds` repair attempts per failed sample. Each attempt shows the model
+its latest answer, Lean's errors with line numbers and goal states, and its
+file numbered. The model rethinks under the same thinking-budget protocol,
+and attempts are graded as they land:
+
+```bash
+physproofbench repair --from runs/pilot --run-dir runs/pilot-repair --rounds 3   # GPU side
+physproofbench grade-run --run-dir runs/pilot-repair --follow                    # CPU side
+```
+
+A sample stops at its first pass. Earlier attempts are kept in
+`samples/.../attempts/<round>/` together with the feedback they produced.
+`summary.md` adds pass@k within ≤0, ≤1, … repair rounds, reported
+separately from one-shot pass@k.
+
 Generation defaults: Qwen3-style thinking sampling (`--temperature 0.6
 --top-p 0.95 --top-k 20`), `--max-tokens 32768`, 16 concurrent requests, and
 the item's `PhysProofBench.Core` source in the prompt (`--core-in-context`).

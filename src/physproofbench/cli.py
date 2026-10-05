@@ -510,6 +510,60 @@ def extend(source_dir, run_dir, max_tokens, answer_reserve, concurrency, items, 
     raise SystemExit(1 if stats.aborted else 0)
 
 
+@main.command()
+@click.option("--from", "source_dir", required=True,
+              type=click.Path(exists=True, path_type=Path),
+              help="A graded run (its attempts become round 0).")
+@click.option("--run-dir", required=True, type=click.Path(path_type=Path),
+              help="New run directory for the repair rounds.")
+@click.option("--rounds", type=int, default=3, show_default=True,
+              help="Repair rounds per sample (stops early at a pass).")
+@click.option("--max-tokens", type=int, default=16384, show_default=True,
+              help="Thinking + answer budget per repair round.")
+@click.option("--answer-tokens", type=int, default=16384, show_default=True,
+              help="Forced-answer budget when a round runs out while thinking.")
+@click.option("--concurrency", type=int, default=12, show_default=True)
+@click.option("--follow/--no-follow", default=True, show_default=True,
+              help="Keep going as `grade-run --follow` grades each attempt, until "
+              "every sample passed or used all rounds. --no-follow: one pass, then exit.")
+@click.option("--poll-interval", type=float, default=30.0, show_default=True)
+@click.option("--items", default="all", show_default=True)
+@click.option("--samples", "-k", type=int, default=None,
+              help="Only sample indices < k (e.g. 1 for a cheap first look).")
+@click.option("--request-timeout", type=float, default=0.0, show_default=True,
+              help="Client-side seconds per request; 0 = none.")
+def repair(source_dir, run_dir, rounds, max_tokens, answer_tokens, concurrency, follow,
+           poll_interval, items, samples, request_timeout):
+    """Generation side (GPU node): compiler-feedback repair rounds.
+
+    For each sample whose latest attempt failed grading, show the model its
+    answer plus Lean's errors and ask for a fixed file; repeat until it
+    passes or --rounds repairs are used. Pair with
+    `grade-run --run-dir <same> --follow` on a node with Lean. Resumable.
+    """
+    from .preflight import check_endpoint
+    from .repair import RepairConfig, repair_run
+
+    import json
+
+    model = json.loads((source_dir / "config.json").read_text(encoding="utf-8"))[
+        "generation"]["model"]
+    checks, _ = check_endpoint(model, on_check=lambda c: _echo_checks([c]))
+    if not all(c.ok for c in checks):
+        raise click.ClickException("preflight failed; nothing sent.")
+    rcfg = RepairConfig(rounds=rounds, max_tokens=max_tokens, answer_tokens=answer_tokens)
+    try:
+        stats = repair_run(
+            source_dir=source_dir, run_dir=run_dir, rcfg=rcfg, concurrency=concurrency,
+            request_timeout=request_timeout or None, follow=follow,
+            poll_interval=poll_interval, items=_csv(items), samples=samples,
+            log=lambda s: click.echo(s),
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    raise SystemExit(1 if stats.aborted else 0)
+
+
 def _grading_options(f):
     options = [
         click.option("--items-dir", type=click.Path(exists=True, path_type=Path),

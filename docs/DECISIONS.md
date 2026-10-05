@@ -121,3 +121,25 @@ drafting and checking complete Lean proofs inside its reasoning. Decided:
   completions endpoint), because chat templates such as Qwen3's insert an
   empty `<think></think>` before a final assistant message that has no
   closing tag, which corrupts an unfinished-reasoning prefix.
+
+## Compiler-feedback repair (after grading the first pilot)
+
+One-shot results were 0/72. The failures were Lean/Mathlib fluency rather
+than mathematics: names that don't exist in the pinned Mathlib (192
+unknown-identifier errors), Lean 3 syntax, small tactic slips, and helper
+lemmas placed before the theorem. Proof strategies were often right
+(`SM_01_E02_001`). The maintainer chose a compiler-feedback repair loop
+(`repair.py`):
+
+- **Metric:** "pass within r repair rounds" is reported next to one-shot
+  pass@k, never merged into it.
+- **Context per round:** original prompt + the latest answer (final text
+  only) + feedback. Not the whole history, so prompts stay bounded. The
+  feedback (versioned `fb-v1`) has up to 12 Lean errors with goal states and
+  the checked file with line numbers. Gate failures are explained in words,
+  e.g. for `statement_edited`: keep the statement, put helpers inside the
+  proof with `have`. The grading rules themselves are unchanged.
+- **Per-round budget:** 16k tokens of thinking + answer, then a forced
+  answer (16k) if needed, the same protocol as `generate` + `force-answer`.
+- **Generation and grading stay split:** `repair --follow` (GPU) and
+  `grade-run --follow` (CPU) pipeline per sample through the run directory.

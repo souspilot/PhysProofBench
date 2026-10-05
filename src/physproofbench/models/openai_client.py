@@ -65,8 +65,13 @@ def complete(
     top_k: int | None = None,
     seed: int | None = None,
     client: OpenAI | None = None,
+    messages: list[dict[str, str]] | None = None,
 ) -> Completion:
-    """`max_tokens=None` or any value <= 0 (0, -1) means *no cap*: the
+    """`messages`, if given, is the whole conversation (e.g. a repair round:
+    prompt, previous answer, compiler feedback) and `prompt`/`system` are
+    ignored.
+
+    `max_tokens=None` or any value <= 0 (0, -1) means *no cap*: the
     parameter is omitted from the request, so the server generates until the
     model stops or its context window is full.
 
@@ -78,10 +83,11 @@ def complete(
     Pass a shared `client` when calling from many threads (the SDK client is
     thread-safe); otherwise one is built per call with `timeout`."""
     client = client or get_client(timeout)
-    messages: list[dict[str, str]] = []
-    if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
+    if messages is None:
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
     extra_body: dict = {}
     if enable_thinking is not None:
         extra_body["chat_template_kwargs"] = {"enable_thinking": enable_thinking}
@@ -156,12 +162,13 @@ class TokenizedPrefix:
 
 
 def tokenize_continuation(
-    prompt: str,
+    prompt: str | None,
     prefix: str,
     *,
     model: str,
     enable_thinking: bool | None = None,
     timeout: float | None = 120.0,
+    messages: list[dict[str, str]] | None = None,
 ) -> TokenizedPrefix:
     """Token ids for: the chat prompt (user turn + generation prompt, exactly
     as `complete` sends it), then `prefix`. If the rendered generation prompt
@@ -173,7 +180,7 @@ def tokenize_continuation(
     root = _server_root(base_url)
     chat_body: dict = {
         "model": model,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": messages or [{"role": "user", "content": prompt}],
         "add_generation_prompt": True,
     }
     if enable_thinking is not None:
@@ -193,7 +200,7 @@ def tokenize_continuation(
 
 
 def complete_continuation(
-    prompt: str,
+    prompt: str | None,
     prefix: str,
     *,
     model: str,
@@ -206,15 +213,16 @@ def complete_continuation(
     seed: int | None = None,
     timeout: float | None = 3600.0,
     client: OpenAI | None = None,
+    messages: list[dict[str, str]] | None = None,
 ) -> Completion:
     """Generate a continuation of `prefix` (assistant-side text) after the
-    chat prompt for `prompt`. `max_tokens` is capped so that prompt + prefix
+    chat prompt for `prompt` (or for the whole conversation `messages`). `max_tokens` is capped so that prompt + prefix
     + generation + `reserve_tokens` fits the server's context window.
     Returns raw generated text in `text` (`reasoning` is always None: no
     reasoning parser runs on this path); `prompt_tokens` is the exact
     prompt + prefix length."""
     tokenized = tokenize_continuation(prompt, prefix, model=model,
-                                      enable_thinking=enable_thinking)
+                                      enable_thinking=enable_thinking, messages=messages)
     if tokenized.max_model_len:
         room = tokenized.max_model_len - len(tokenized.ids) - reserve_tokens
         max_tokens = min(max_tokens, room)
