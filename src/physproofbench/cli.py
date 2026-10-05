@@ -294,10 +294,12 @@ def preflight(model, items, conditions, temperature, top_p, top_k, max_tokens, t
         model, items, conditions, temperature, top_p, top_k, max_tokens, thinking,
         core_in_context, seed, items_dir, lean_project, samples)
     _print_plan(plan, samples)
-    checks, max_len = check_endpoint(model)
-    longest = max((len(p.text) for p in plan.prompts.values()), default=0)
-    checks.append(check_context_budget(longest, config.max_tokens, max_len))
-    _echo_checks(checks)
+    checks, max_len = check_endpoint(model, on_check=lambda c: _echo_checks([c]))
+    if max_len is not None or all(c.ok for c in checks):
+        longest = max((len(p.text) for p in plan.prompts.values()), default=0)
+        budget = check_context_budget(longest, config.max_tokens, max_len)
+        checks.append(budget)
+        _echo_checks([budget])
     raise SystemExit(0 if all(c.ok for c in checks) else 1)
 
 
@@ -349,11 +351,13 @@ def generate(model, items, conditions, temperature, top_p, top_k, max_tokens, th
         check_resume_compatible(run_dir, config)
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
-    checks, max_len = check_endpoint(model)
-    longest = max((len(p.text) for p in plan.prompts.values()), default=0)
-    checks.append(check_context_budget(longest, config.max_tokens, max_len))
+    checks, max_len = check_endpoint(model, on_check=lambda c: _echo_checks([c]))
+    if all(c.ok for c in checks):
+        longest = max((len(p.text) for p in plan.prompts.values()), default=0)
+        budget = check_context_budget(longest, config.max_tokens, max_len)
+        checks.append(budget)
+        _echo_checks([budget])
     if not all(c.ok for c in checks):
-        _echo_checks(checks)
         raise click.ClickException("preflight failed; nothing sent.")
     stats = generate_run(
         config=config, plan=plan, run_dir=run_dir, concurrency=concurrency,
