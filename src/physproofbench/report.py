@@ -58,6 +58,8 @@ def collect_records(run_dir: Path) -> list[dict]:
             "gate_failures": [],
             "compile_timed_out": None,
             "statement_edited_would_pass": False,
+            "forced_answer": bool((completion or {}).get("forced_answer")),
+            "extended": bool((completion or {}).get("extended")),
         }
         if grade is not None and completion is not None and (
             grade.get("candidate_sha") == completion.get("candidate_sha")
@@ -82,6 +84,10 @@ def _group_stats(recs: list[dict], ks: list[int]) -> dict:
         "passed": c,
         "verdicts": dict(Counter(r["verdict"] for r in graded)),
         "truncated": sum(r["finish_reason"] == "length" for r in recs),
+        # Answers obtained with `force-answer` after the thinking budget ran out.
+        "forced_answers": sum(r["forced_answer"] for r in recs),
+        "forced_passed": sum(r["forced_answer"] and r["verdict"] == "pass" for r in recs),
+        "extended": sum(r["extended"] for r in recs),
         "no_lean_fence": sum(bool(r["used_extraction_fallback"]) for r in recs),
         "compile_timeouts": sum(bool(r["compile_timed_out"]) for r in graded),
         # Rejected by the L0 text gate as statement_edited, yet compiling,
@@ -188,7 +194,9 @@ def render_markdown(summary: dict) -> str:
         f"Samples: {t['samples']} ({t['generated']} generated, {t['graded']} graded, "
         f"{t['passed']} passed). Truncated at token limit: {t['truncated']}. "
         f"No ```lean fence: {t['no_lean_fence']}. Compile timeouts: {t['compile_timeouts']}. "
-        f"Rejected as statement_edited but otherwise correct: {t['statement_edited_would_pass']}.",
+        f"Rejected as statement_edited but otherwise correct: {t['statement_edited_would_pass']}. "
+        f"Answers forced after the thinking budget (`force-answer`): {t['forced_answers']} "
+        f"({t['forced_passed']} passed).",
         "",
         "## By condition (mean over items)",
         "",

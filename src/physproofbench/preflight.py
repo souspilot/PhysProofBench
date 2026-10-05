@@ -8,10 +8,13 @@ plumbing works, not merely that the tools are installed.
 
 from __future__ import annotations
 
+import os
 import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
+from urllib.parse import urlparse
 
 from .grading import grade_submission
 from .lean.sandbox import DEFAULT_MEMORY_CAP_BYTES, find_lake, resolve_lake_env
@@ -30,34 +33,87 @@ class Check:
     warning: bool = False  # ok, but worth a look
 
 
-def check_endpoint(model: str, timeout: float = 120.0) -> tuple[list[Check], int | None]:
+def _proxy_check(base_url: str | None) -> Check | None:
+    """Flag the classic cluster trap: HTTP(S)_PROXY set, and NO_PROXY not
+    covering a local server, so the client sends localhost traffic to the
+    proxy and stalls until it times out."""
+    if not base_url:
+        return None
+    host = urlparse(base_url).hostname or ""
+    proxies = {k: v for k, v in os.environ.items()
+               if k.lower() in ("http_proxy", "https_proxy", "all_proxy") and v}
+    if not proxies:
+        return None
+    no_proxy = ",".join(os.environ.get(k, "") for k in ("NO_PROXY", "no_proxy"))
+    covered = any(h.strip() and (host == h.strip() or host.endswith(h.strip().lstrip("*")))
+                  for h in no_proxy.split(","))
+    if covered:
+        return None
+    return Check("proxy", True,
+                 f"{sorted(proxies)} set and NO_PROXY does not cover {host!r}: requests "
+                 "to the model server will go through the proxy and may hang. Run "
+                 f"`export NO_PROXY={host},localhost,127.0.0.1 no_proxy={host},"
+                 "localhost,127.0.0.1`.", warning=True)
+
+
+def check_endpoint(
+    model: str,
+    *,
+    connect_timeout: float = 15.0,
+    request_timeout: float = 120.0,
+    on_check: Callable[[Check], None] | None = None,
+) -> tuple[list[Check], int | None]:
     """Server reachable, `model` served, one tiny request round-trips.
-    Returns the checks and the server's `max_model_len` (vLLM), if reported."""
+    Returns the checks and the server's `max_model_len` (vLLM), if reported.
+
+    Each check is passed to `on_check` as soon as it completes, so a slow
+    or unreachable server shows up immediately rather than as silence.
+    Listing models gets a short timeout (the server either answers at once
+    or isn't there); only the test generation gets the longer one."""
     checks: list[Check] = []
+
+    def add(check: Check) -> None:
+        checks.append(check)
+        if on_check:
+            on_check(check)
+
+    base_url = os.environ.get("OPENAI_BASE_URL")
+    add(Check("server URL", bool(base_url),
+              base_url or "OPENAI_BASE_URL is not set, so requests would go to "
+              "api.openai.com. For a local vLLM server: "
+              "`export OPENAI_BASE_URL=http://localhost:8000/v1`."))
+    if not base_url:
+        return checks, None
+    proxy = _proxy_check(base_url)
+    if proxy:
+        add(proxy)
     try:
-        client = get_client(timeout)
-        models = client.models.list().data
+        models = get_client(connect_timeout).models.list().data
     except Exception as exc:  # noqa: BLE001
-        return [Check("endpoint reachable", False, f"{type(exc).__name__}: {exc}")], None
+        add(Check("endpoint reachable", False,
+                  f"{type(exc).__name__}: {exc}. Is vLLM up? Check its log for "
+                  "'Application startup complete' and try "
+                  f"`curl {base_url.rstrip('/')}/models`."))
+        return checks, None
     ids = [m.id for m in models]
-    checks.append(Check("endpoint reachable", True, f"serving {ids}"))
+    add(Check("endpoint reachable", True, f"serving {ids}"))
     match = next((m for m in models if m.id == model), None)
     if match is None:
-        checks.append(Check("model served", False, f"{model!r} not in {ids} "
-                            "(--model must equal vLLM's --served-model-name)"))
+        add(Check("model served", False, f"{model!r} not in {ids} "
+                  "(--model must equal vLLM's --served-model-name)"))
         return checks, None
     max_len = getattr(match, "max_model_len", None)
-    checks.append(Check("model served", True, f"{model!r}, max_model_len={max_len}"))
+    add(Check("model served", True, f"{model!r}, max_model_len={max_len}"))
     try:
-        out = complete("Reply with the single word: ready", model=model,
-                       max_tokens=64, client=client)
-        checks.append(Check(
+        out = complete("Reply with the single word: ready", model=model, max_tokens=64,
+                       client=get_client(request_timeout))
+        add(Check(
             "test request", True,
             f"{out.elapsed_s:.1f}s, finish={out.finish_reason}, "
             f"reasoning returned separately: {out.reasoning is not None}",
         ))
     except Exception as exc:  # noqa: BLE001
-        checks.append(Check("test request", False, f"{type(exc).__name__}: {exc}"))
+        add(Check("test request", False, f"{type(exc).__name__}: {exc}"))
     return checks, max_len
 
 
