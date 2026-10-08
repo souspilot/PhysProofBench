@@ -86,6 +86,36 @@ class GenerationConfig:
     seed: int = 0
     mode: str = "proof"
     template_version: str = TEMPLATE_VERSION
+    # Lean project = Mathlib pin ("lean": v4.34; "lean-v4.9": Lean 4.9-era).
+    # Prompts, gold statements and grading all come from this project.
+    lean_project: str = "lean"
+
+
+# Defaults for GenerationConfig fields added after runs already existed: a
+# stored config without the key means the default, not a settings change.
+_CONFIG_FIELD_DEFAULTS = {"lean_project": "lean"}
+
+
+def gold_path(meta: ItemMeta, lean_project_dir: Path) -> Path:
+    """The item's gold file inside `lean_project_dir` (the pin). `lean_file`
+    in meta.yaml is written relative to the main pin, `lean/`."""
+    rel = Path(meta.lean_file)
+    if rel.parts and rel.parts[0] == "lean":
+        rel = Path(*rel.parts[1:])
+    return lean_project_dir / rel
+
+
+def pin_info(lean_project_dir: Path) -> dict:
+    """Toolchain and Mathlib revision of a Lean project, for run metadata."""
+    info: dict = {"lean_project": lean_project_dir.name}
+    toolchain = lean_project_dir / "lean-toolchain"
+    if toolchain.exists():
+        info["lean_toolchain"] = toolchain.read_text(encoding="utf-8").strip()
+    manifest = _read_json(lean_project_dir / "lake-manifest.json") or {}
+    for pkg in manifest.get("packages", []):
+        if pkg.get("name") == "mathlib":
+            info["mathlib_rev"] = pkg.get("rev")
+    return info
 
 
 @dataclass(frozen=True)
@@ -185,7 +215,6 @@ def build_plan(
     items_dir: Path,
     lean_project_dir: Path,
 ) -> Plan:
-    repo_root = items_dir.parent
     plan = Plan(tasks=[], prompts={}, metas={})
     for item_id in item_ids:
         item_dir = items_dir / item_id
@@ -195,7 +224,7 @@ def build_plan(
             for cond in conditions:
                 plan.skipped.append((item_id, cond, f"item has no {config.mode!r} mode"))
             continue
-        gold_text = (repo_root / meta.lean_file).read_text(encoding="utf-8")
+        gold_text = gold_path(meta, lean_project_dir).read_text(encoding="utf-8")
         plan.gold_shas[item_id] = _sha(gold_text)
         gold_prefix = gold_statement_prefix(gold_text)
         core_source = None
@@ -229,7 +258,8 @@ def check_resume_compatible(run_dir: Path, config: GenerationConfig) -> None:
         return
     stored = existing.get("generation", {})
     current = asdict(config)
-    diffs = {k: (stored.get(k), v) for k, v in current.items() if stored.get(k) != v}
+    diffs = {k: (stored.get(k, _CONFIG_FIELD_DEFAULTS.get(k)), v) for k, v in current.items()
+             if stored.get(k, _CONFIG_FIELD_DEFAULTS.get(k)) != v}
     if diffs:
         lines = "\n".join(f"  {k}: run has {a!r}, now {b!r}" for k, (a, b) in diffs.items())
         raise ValueError(
@@ -301,7 +331,8 @@ def generate_run(
     check_resume_compatible(run_dir, config)
     # Keep other keys (e.g. `forced_answer`) when extending a run.
     _write_json(run_dir / "config.json",
-                {**(_read_json(run_dir / "config.json") or {}), "generation": asdict(config)})
+                {**(_read_json(run_dir / "config.json") or {}), "generation": asdict(config),
+                 "pin": pin_info(Path(config.lean_project))})
     # Mark the run as generating *before* publishing plan.json: a grader
     # following this run starts as soon as plan.json exists, and would exit
     # at once if it saw no "generating" status.
@@ -480,7 +511,6 @@ def grade_run(
     if stored_config is None:
         raise FileNotFoundError(f"{run_dir / 'config.json'} not found")
     config = GenerationConfig(**stored_config["generation"])
-    repo_root = items_dir.parent
     stats = GradeStats()
     lock = threading.Lock()
     metas: dict[str, ItemMeta] = {}
@@ -488,7 +518,7 @@ def grade_run(
     def check_items(item_ids: set[str], gold_shas: dict[str, str]) -> None:
         for item_id in sorted(item_ids - metas.keys() - set(stats.gold_mismatch)):
             meta = load_item_meta(items_dir / item_id / "meta.yaml")
-            local = _sha((repo_root / meta.lean_file).read_text(encoding="utf-8"))
+            local = _sha(gold_path(meta, lean_project_dir).read_text(encoding="utf-8"))
             if gold_shas.get(item_id) != local:
                 stats.gold_mismatch.append(item_id)
                 log(f"[grade] SKIPPING {item_id}: its gold Lean file in this checkout "
@@ -510,7 +540,7 @@ def grade_run(
                 record = grade_fn(
                     lean_project_dir=lean_project_dir,
                     submission_path=task_dir / "candidate.lean",
-                    gold_path=repo_root / meta.lean_file,
+                    gold_path=gold_path(meta, lean_project_dir),
                     decl_name=meta.decl_name,
                     mode=config.mode,
                     timeout=compile_timeout,

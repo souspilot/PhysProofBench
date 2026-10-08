@@ -28,3 +28,5 @@ book/solutions.pdf
 .claude/
 
 .DS_Store
+lean-v4.9/.lake/
+lean-v4.9/PhysProofBenchSolutions/

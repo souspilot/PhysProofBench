@@ -158,11 +158,19 @@ def check_lean_env(lean_project_dir: Path) -> list[Check]:
         return [Check("lake found", False, str(exc))]
     try:
         env = resolve_lake_env(lean_project_dir)
-        checks.append(Check("lake env", True, f"LEAN={env.get('LEAN')}"))
+        from .lean.sandbox import lean_binary
+
+        checks.append(Check("lake env", bool(lean_binary(env)), f"lean={lean_binary(env)}"))
     except Exception as exc:  # noqa: BLE001
         return checks + [Check("lake env", False, str(exc))]
 
-    mathlib_olean = (lean_project_dir / ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib.olean")
+    # Build outputs live in `.lake/build/lib/lean/` (current Lake) or
+    # `.lake/build/lib/` (Lake of the Lean 4.9 era, the `lean-v4.9` pin).
+    def first_existing(*paths: Path) -> Path:
+        return next((p for p in paths if p.exists()), paths[0])
+
+    mathlib_lib = lean_project_dir / ".lake/packages/mathlib/.lake/build/lib"
+    mathlib_olean = first_existing(mathlib_lib / "lean/Mathlib.olean", mathlib_lib / "Mathlib.olean")
     checks.append(Check(
         "Mathlib.olean (umbrella)", mathlib_olean.exists(),
         "present" if mathlib_olean.exists() else
@@ -170,7 +178,8 @@ def check_lean_env(lean_project_dir: Path) -> list[Check]:
         "`lake exe cache get && lake build Mathlib` in lean/ (docs/GRADING.md L1).",
     ))
 
-    build_dir = lean_project_dir / ".lake/build/lib/lean"
+    build_dir = first_existing(lean_project_dir / ".lake/build/lib/lean",
+                               lean_project_dir / ".lake/build/lib")
     stale = []
     for src in sorted((lean_project_dir / "PhysProofBench").rglob("*.lean")):
         olean = build_dir / src.relative_to(lean_project_dir).with_suffix(".olean")

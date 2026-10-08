@@ -232,7 +232,9 @@ def _generation_options(f):
         click.option("--items-dir", type=click.Path(exists=True, path_type=Path),
                      default=Path("items"), show_default=True),
         click.option("--lean-project", type=click.Path(exists=True, path_type=Path),
-                     default=Path("lean"), show_default=True),
+                     default=Path("lean"), show_default=True,
+                     help="Mathlib pin: `lean` (v4.34) or `lean-v4.9` (Lean 4.9-era, what "
+                     "most specialist provers were trained on). Recorded in the run."),
     ]
     for option in reversed(options):
         f = option(f)
@@ -285,6 +287,7 @@ def _build_config_and_plan(model, items, conditions, temperature, top_p, top_k,
         enable_thinking=thinking,
         core_in_context=core_in_context,
         seed=seed,
+        lean_project=str(lean_project),
     )
     plan = build_plan(
         config=config,
@@ -625,7 +628,9 @@ def _grading_options(f):
         click.option("--items-dir", type=click.Path(exists=True, path_type=Path),
                      default=Path("items"), show_default=True),
         click.option("--lean-project", type=click.Path(exists=True, path_type=Path),
-                     default=Path("lean"), show_default=True),
+                     default=None,
+                     help="Lean project (Mathlib pin) to grade with. Default: the run's own "
+                     "pin (grade-run), or `lean` (lean-check)."),
         click.option("--compile-timeout", type=float, default=300.0, show_default=True),
         click.option("--memory-cap-gb", type=float, default=32.0, show_default=True,
                      help="Virtual-memory cap per Lean compile (Linux only); 0 = none."),
@@ -647,6 +652,7 @@ def lean_check(items_dir, lean_project, compile_timeout, memory_cap_gb):
     """
     from .preflight import check_lean
 
+    lean_project = lean_project or Path("lean")
     checks = check_lean(lean_project, memory_cap_bytes=int(memory_cap_gb * _GiB) or None,
                         compile_timeout=compile_timeout)
     _echo_checks(checks)
@@ -676,10 +682,17 @@ def grade_run(run_dir, items_dir, lean_project, compile_timeout, memory_cap_gb,
     and samples are re-graded only if their grade is missing, stale (a
     newer grading version) or a grader error.
     """
+    import json
+
     from .batch import grade_run as _grade_run
     from .preflight import check_lean_env
     from .report import write_report
 
+    if lean_project is None:
+        stored = (json.loads((run_dir / "config.json").read_text(encoding="utf-8"))
+                  if (run_dir / "config.json").exists() else {})
+        lean_project = Path(stored.get("generation", {}).get("lean_project", "lean"))
+        click.echo(f"grading against the run's Mathlib pin: {lean_project}")
     if not follow and not (run_dir / "plan.json").exists():
         raise click.ClickException(
             f"{run_dir} has no plan.json: not a run written by `physproofbench "

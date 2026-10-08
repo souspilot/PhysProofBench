@@ -156,3 +156,31 @@ lemmas placed before the theorem. Proof strategies were often right
   (`book/solutions.pdf`, kept out of git), paraphrased per
   `CONTRIBUTING.md`. With these, all four conditions can run on every item
   once `autoform` mode exists.
+
+## Two Mathlib pins (2026-10-08)
+
+Maintainer's decision, to keep Mathlib version drift from penalizing
+models trained on an older library:
+
+- **Pins:** `lean/` (Lean/Mathlib v4.34, the main pin) and `lean-v4.9/`
+  (Mathlib tag `v4.9.0-rc1` on `leanprover/lean4:v4.9.0-rc1`). That is the
+  protocol Pythagoras-Prover is evaluated under, and Goedel-Prover-V2 /
+  DeepSeek-Prover use Lean 4.9 too. Published evidence of the drift cost:
+  Goedel-Prover-V2-32B drops from 90% to 80% on miniF2F, and from 86% to 75%
+  on PutnamBench, moving from Mathlib for 4.9 to 4.19 (ProofOptimizer,
+  arXiv:2510.15700).
+- **Same statements:** item statements are textually identical across pins
+  (`tests/test_pins.py`); only `import` lines differ (`import Mathlib` on
+  the old pin). Core is copied verbatim, again apart from imports, so the
+  definitions are the same text on both.
+- **Caveat: same theorem, different library.** An item can be harder on
+  the old pin. The seed item's v4.34 reference proof fails on 4.9 because
+  the Jensen equality-case lemma (`StrictConcaveOn.map_sum_eq_iff_of_nonneg`)
+  did not exist yet. Results are always labelled with their pin (recorded
+  in each run's `config.json`). Claims of cross-pin comparability need a
+  reference proof on each pin; so far that holds only for the canaries.
+- **Tooling:** runs record `generation.lean_project` plus `pin` (toolchain,
+  Mathlib revision). `grade-run` defaults to the run's pin. The sandbox and
+  `lean-check` handle the old Lake's environment and build layout.
+  `scripts/setup-pin.sh` works around orphaned dependency commits and, on
+  macOS, a dyld rejection of old binaries.

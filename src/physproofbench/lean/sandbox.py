@@ -165,6 +165,20 @@ def _build_command(
     return base
 
 
+def lean_binary(env_vars: dict[str, str]) -> str | None:
+    """The `lean` binary from a resolved Lake environment. Newer Lake reports
+    it as `LEAN`; Lake from the Lean 4.9 era (the `lean-v4.9` pin) only
+    reports the toolchain root, `LEAN_SYSROOT`. (That older Lake also writes
+    `LEAN_PATH` relative to the project; compiles run with the project as
+    working directory, so it resolves.)"""
+    if env_vars.get("LEAN"):
+        return env_vars["LEAN"]
+    sysroot = env_vars.get("LEAN_SYSROOT")
+    if sysroot and (Path(sysroot) / "bin" / "lean").exists():
+        return str(Path(sysroot) / "bin" / "lean")
+    return None
+
+
 def compile_file(
     lean_project_dir: Path,
     file_path: Path,
@@ -185,7 +199,7 @@ def compile_file(
     observed to hang reading stdin.
     """
     env_vars = resolve_lake_env(lean_project_dir)
-    lean_bin = env_vars.get("LEAN")
+    lean_bin = lean_binary(env_vars)
     if not lean_bin:
         raise RuntimeError(
             f"`lake env` at {lean_project_dir} did not report a LEAN binary path"
