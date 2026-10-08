@@ -12,10 +12,6 @@
 - Continuity is assumed, not differentiability. That is weaker than the
   postulate grants, hence a weaker hypothesis and a stronger theorem, and it
   is exactly what the proof needs.
-- The source gives only a hint, not a proof, so `nl.proof` is omitted.
-- **No `## proof` in `nl.md`.** The source leaves this as an exercise and
-  gives no proof, so per `plan.md` §4 `nl.proof` is omitted. Only the
-  `no_nl_proof` conditions (A1, B1) apply to this item.
 
 ## Hidden assumptions
 
@@ -40,3 +36,8 @@ with `sorry` against the pinned toolchain (`lake build PhysProofBench`).
 
 - Not yet through the two-reviewer process (`reviewed_by: []`).
 - Check fidelity of the formalization decisions above against the source.
+
+## NL proof source
+
+`nl.md#proof` follows the source's solution to Exercise 1.1 (Appendix C) (2026-10-08). It was added so
+the `with_nl_proof` conditions apply to this item.

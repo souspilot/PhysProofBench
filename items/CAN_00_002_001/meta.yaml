@@ -1,0 +1,32 @@
+id: CAN_00_002_001
+schema_version: 1
+status: draft
+role: canary
+source:
+  book: CAN
+  chapter: 0
+  item_label: canary 002
+  pages: []
+topic:
+- canary
+proof_kind: exact
+hidden_assumptions: []
+lean_file: lean/PhysProofBench/Items/CAN_00_002_001.lean
+decl_name: spin_mul_self
+solution_file: lean/PhysProofBenchSolutions/CAN_00_002_001.lean
+imports_physlib: false
+modes:
+- proof
+- autoform
+nl:
+  statement: nl.md#statement
+  proof: nl.md#proof
+difficulty:
+  decl_count: 0
+  band: very_small
+depends_on: []
+core_deps:
+- PhysProofBench.Core.Spin
+library_gaps: []
+contributed_by: harshitbiitk@gmail.com
+reviewed_by: []

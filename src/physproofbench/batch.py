@@ -86,6 +86,36 @@ class GenerationConfig:
     seed: int = 0
     mode: str = "proof"
     template_version: str = TEMPLATE_VERSION
+    # Lean project = Mathlib pin ("lean": v4.34; "lean-v4.9": Lean 4.9-era).
+    # Prompts, gold statements and grading all come from this project.
+    lean_project: str = "lean"
+
+
+# Defaults for GenerationConfig fields added after runs already existed: a
+# stored config without the key means the default, not a settings change.
+_CONFIG_FIELD_DEFAULTS = {"lean_project": "lean"}
+
+
+def gold_path(meta: ItemMeta, lean_project_dir: Path) -> Path:
+    """The item's gold file inside `lean_project_dir` (the pin). `lean_file`
+    in meta.yaml is written relative to the main pin, `lean/`."""
+    rel = Path(meta.lean_file)
+    if rel.parts and rel.parts[0] == "lean":
+        rel = Path(*rel.parts[1:])
+    return lean_project_dir / rel
+
+
+def pin_info(lean_project_dir: Path) -> dict:
+    """Toolchain and Mathlib revision of a Lean project, for run metadata."""
+    info: dict = {"lean_project": lean_project_dir.name}
+    toolchain = lean_project_dir / "lean-toolchain"
+    if toolchain.exists():
+        info["lean_toolchain"] = toolchain.read_text(encoding="utf-8").strip()
+    manifest = _read_json(lean_project_dir / "lake-manifest.json") or {}
+    for pkg in manifest.get("packages", []):
+        if pkg.get("name") == "mathlib":
+            info["mathlib_rev"] = pkg.get("rev")
+    return info
 
 
 @dataclass(frozen=True)
@@ -185,7 +215,6 @@ def build_plan(
     items_dir: Path,
     lean_project_dir: Path,
 ) -> Plan:
-    repo_root = items_dir.parent
     plan = Plan(tasks=[], prompts={}, metas={})
     for item_id in item_ids:
         item_dir = items_dir / item_id
@@ -195,7 +224,7 @@ def build_plan(
             for cond in conditions:
                 plan.skipped.append((item_id, cond, f"item has no {config.mode!r} mode"))
             continue
-        gold_text = (repo_root / meta.lean_file).read_text(encoding="utf-8")
+        gold_text = gold_path(meta, lean_project_dir).read_text(encoding="utf-8")
         plan.gold_shas[item_id] = _sha(gold_text)
         gold_prefix = gold_statement_prefix(gold_text)
         core_source = None
@@ -229,7 +258,8 @@ def check_resume_compatible(run_dir: Path, config: GenerationConfig) -> None:
         return
     stored = existing.get("generation", {})
     current = asdict(config)
-    diffs = {k: (stored.get(k), v) for k, v in current.items() if stored.get(k) != v}
+    diffs = {k: (stored.get(k, _CONFIG_FIELD_DEFAULTS.get(k)), v) for k, v in current.items()
+             if stored.get(k, _CONFIG_FIELD_DEFAULTS.get(k)) != v}
     if diffs:
         lines = "\n".join(f"  {k}: run has {a!r}, now {b!r}" for k, (a, b) in diffs.items())
         raise ValueError(
@@ -301,7 +331,12 @@ def generate_run(
     check_resume_compatible(run_dir, config)
     # Keep other keys (e.g. `forced_answer`) when extending a run.
     _write_json(run_dir / "config.json",
-                {**(_read_json(run_dir / "config.json") or {}), "generation": asdict(config)})
+                {**(_read_json(run_dir / "config.json") or {}), "generation": asdict(config),
+                 "pin": pin_info(Path(config.lean_project))})
+    # Mark the run as generating *before* publishing plan.json: a grader
+    # following this run starts as soon as plan.json exists, and would exit
+    # at once if it saw no "generating" status.
+    _set_status(run_dir, GENERATING, planned=len(plan.tasks))
     _write_plan(run_dir, plan)
     for (item_id, cond), prompt in plan.prompts.items():
         _atomic_write(run_dir / "prompts" / f"{item_id}__{cond}.txt", prompt.text)
@@ -476,7 +511,6 @@ def grade_run(
     if stored_config is None:
         raise FileNotFoundError(f"{run_dir / 'config.json'} not found")
     config = GenerationConfig(**stored_config["generation"])
-    repo_root = items_dir.parent
     stats = GradeStats()
     lock = threading.Lock()
     metas: dict[str, ItemMeta] = {}
@@ -484,7 +518,7 @@ def grade_run(
     def check_items(item_ids: set[str], gold_shas: dict[str, str]) -> None:
         for item_id in sorted(item_ids - metas.keys() - set(stats.gold_mismatch)):
             meta = load_item_meta(items_dir / item_id / "meta.yaml")
-            local = _sha((repo_root / meta.lean_file).read_text(encoding="utf-8"))
+            local = _sha(gold_path(meta, lean_project_dir).read_text(encoding="utf-8"))
             if gold_shas.get(item_id) != local:
                 stats.gold_mismatch.append(item_id)
                 log(f"[grade] SKIPPING {item_id}: its gold Lean file in this checkout "
@@ -506,7 +540,7 @@ def grade_run(
                 record = grade_fn(
                     lean_project_dir=lean_project_dir,
                     submission_path=task_dir / "candidate.lean",
-                    gold_path=repo_root / meta.lean_file,
+                    gold_path=gold_path(meta, lean_project_dir),
                     decl_name=meta.decl_name,
                     mode=config.mode,
                     timeout=compile_timeout,
@@ -617,8 +651,14 @@ def _truncated_while_thinking(record: dict) -> bool:
     )
 
 
-def _needs_forced_answer(record: dict) -> bool:
-    return _truncated_while_thinking(record) and not record.get("forced_answer")
+def _needs_forced_answer(record: dict, redo_capped: bool = False) -> bool:
+    """Truncated while thinking and not yet forced -- or, with
+    `redo_capped`, forced but cut off by the (smaller) answer budget."""
+    if not _truncated_while_thinking(record):
+        return False
+    if not record.get("forced_answer"):
+        return True
+    return redo_capped and record.get("forced_finish_reason") == "length"
 
 
 def _load_prompt(run_dir: Path, task: SampleTask, record: dict) -> str | None:
@@ -699,7 +739,12 @@ def force_answers(
     `forced.json`, and `candidate.lean` / `candidate_sha` are rewritten, so
     `grade-run` grades the forced answer. The original `finish_reason`
     ("length") is kept. Settings are recorded in `config.json` under
-    `forced_answer`; a later call with different settings is refused.
+    `forced_answer`.
+
+    Calling again with a *larger* `answer_tokens` upgrades the run: answers
+    that hit the old cap are re-forced, the rest are kept (an answer that
+    ended within the smaller budget would have ended identically with more).
+    A smaller budget, or a different phrase, is refused.
     """
     stored = _read_json(run_dir / "config.json")
     if stored is None:
@@ -709,9 +754,23 @@ def force_answers(
         raise ValueError("this run was generated with thinking disabled; nothing to force")
     settings = {"answer_tokens": answer_tokens, "phrase": FORCE_ANSWER_PHRASE}
     previous = stored.get("forced_answer")
-    if previous is not None and previous != settings:
-        raise ValueError(f"{run_dir} already has forced answers made with {previous}; "
-                         f"refusing to mix in answers made with {settings}.")
+    redo_capped = False
+    if previous is not None:
+        same_phrase = previous.get("phrase") == FORCE_ANSWER_PHRASE
+        old_tokens = previous.get("answer_tokens", 0)
+        if not same_phrase or answer_tokens < old_tokens:
+            raise ValueError(
+                f"{run_dir} already has forced answers made with {previous}; refusing to "
+                f"mix in answers made with {settings} (only raising --answer-tokens is "
+                "allowed: it re-forces the answers that hit the old cap)."
+            )
+        redo_capped = answer_tokens > old_tokens
+        if redo_capped:
+            settings["upgraded_from"] = previous.get("upgraded_from", []) + [old_tokens]
+            log(f"[force] raising the answer budget {old_tokens} -> {answer_tokens}: "
+                "re-forcing answers that hit the old cap")
+        else:
+            settings = previous
     _write_json(run_dir / "config.json", {**stored, "forced_answer": settings})
 
     tasks, _ = read_plan(run_dir)
@@ -721,7 +780,7 @@ def force_answers(
         if items and task.item_id not in items:
             continue
         record = _read_json(task.dir(run_dir) / "completion.json")
-        if record is None or not _needs_forced_answer(record):
+        if record is None or not _needs_forced_answer(record, redo_capped):
             continue
         stats.eligible += 1
         prompt = _load_prompt(run_dir, task, record)
@@ -850,6 +909,7 @@ def extend_run(
              if (not items or t.item_id in items) and (samples is None or t.index < samples)]
     plan = Plan(tasks=tasks, prompts={}, metas={},
                 gold_shas={i: s for i, s in gold_shas.items() if any(t.item_id == i for t in tasks)})
+    _set_status(run_dir, GENERATING, planned=len(tasks))  # before plan.json; see generate_run
     _write_plan(run_dir, plan)
     for item_id, cond in {(t.item_id, t.condition) for t in tasks}:
         name = f"{item_id}__{cond}.txt"

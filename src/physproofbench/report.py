@@ -60,6 +60,9 @@ def collect_records(run_dir: Path) -> list[dict]:
             "statement_edited_would_pass": False,
             "forced_answer": bool((completion or {}).get("forced_answer")),
             "extended": bool((completion or {}).get("extended")),
+            "repair_round": (completion or {}).get("repair_round"),
+            # First attempt (round) that passed, for repair runs; None if none.
+            "pass_round": None,
         }
         if grade is not None and completion is not None and (
             grade.get("candidate_sha") == completion.get("candidate_sha")
@@ -69,6 +72,11 @@ def collect_records(run_dir: Path) -> list[dict]:
             rec["compile_timed_out"] = grade.get("compile_timed_out")
             diag = grade.get("statement_edit_diagnostic") or {}
             rec["statement_edited_would_pass"] = bool(diag.get("would_pass"))
+        if rec["repair_round"] is not None:
+            from .repair import attempt_history
+
+            history = attempt_history(sample_dir)
+            rec["pass_round"] = history.index("pass") if "pass" in history else None
         records.append(rec)
     return records
 
@@ -108,16 +116,22 @@ def _mean_over_items(per_item: list[dict], key: str) -> float | None:
 
 def summarize(run_dir: Path, items_dir: Path) -> dict:
     config = _read(run_dir / "config.json") or {}
-    records = collect_records(run_dir)
+    all_records = collect_records(run_dir)
     max_n = max(
-        (len(v) for v in _by(records, ("item_id", "condition")).values()), default=0
+        (len(v) for v in _by(all_records, ("item_id", "condition")).values()), default=0
     )
     ks = sorted({1, max_n} - {0})
 
     kinds: dict[str, str] = {}
-    for item_id in {r["item_id"] for r in records}:
+    roles: dict[str, str] = {}
+    for item_id in {r["item_id"] for r in all_records}:
         meta_path = items_dir / item_id / "meta.yaml"
-        kinds[item_id] = load_item_meta(meta_path).proof_kind if meta_path.exists() else "?"
+        meta = load_item_meta(meta_path) if meta_path.exists() else None
+        kinds[item_id] = meta.proof_kind if meta else "?"
+        roles[item_id] = meta.role if meta else "benchmark"
+    # Canaries are pipeline checks: kept out of every benchmark number.
+    records = [r for r in all_records if roles[r["item_id"]] != "canary"]
+    canary_records = [r for r in all_records if roles[r["item_id"]] == "canary"]
 
     per_cell = {
         f"{item}|{cond}": {"item_id": item, "condition": cond, "proof_kind": kinds[item],
@@ -142,6 +156,7 @@ def summarize(run_dir: Path, items_dir: Path) -> dict:
             }
             for g, cells in sorted(groups.items())
         }
+    repair = _repair_summary(records, ks, config)
     gate_reasons = Counter(f for r in records if r["verdict"] == "gate_fail" for f in r["gate_failures"])
     status = _read(run_dir / "status.json") or {}
     planned = len((_read(run_dir / "plan.json") or {}).get("tasks", []))
@@ -155,7 +170,45 @@ def summarize(run_dir: Path, items_dir: Path) -> dict:
         "per_item_condition": per_cell,
         "aggregates": aggregates,
         "gate_failure_reasons": dict(gate_reasons.most_common()),
+        "repair": repair,
+        "canaries": _canary_summary(canary_records, ks),
     }
+
+
+def _canary_summary(records: list[dict], ks: list[int]) -> dict | None:
+    if not records:
+        return None
+    cells = {f"{i}|{c}": {"item_id": i, "condition": c, **_group_stats(recs, ks)}
+             for (i, c), recs in sorted(_by(records, ("item_id", "condition")).items())}
+    items = sorted({r["item_id"] for r in records})
+    solved = [i for i in items if any(r["item_id"] == i and r["verdict"] == "pass"
+                                      for r in records)]
+    return {"items": len(items), "items_solved": len(solved),
+            "unsolved": [i for i in items if i not in solved], "cells": cells}
+
+
+def _repair_summary(records: list[dict], ks: list[int], config: dict) -> dict | None:
+    """Per condition, mean over items of pass@k counting a sample as passed
+    if it passed within r repair rounds, for r = 0..rounds."""
+    settings = config.get("repair")
+    if not settings or not any(r["repair_round"] is not None for r in records):
+        return None
+    rounds = settings.get("rounds", 0)
+    by_round: dict = {}
+    for r_max in range(rounds + 1):
+        by_cond: dict[str, list[dict]] = defaultdict(list)
+        for (item, cond), recs in _by(records, ("item_id", "condition")).items():
+            n = len(recs)
+            c = sum(r["pass_round"] is not None and r["pass_round"] <= r_max for r in recs)
+            by_cond[cond].append({f"pass@{k}": pass_at_k(n, c, k) for k in ks}
+                                 | {"solved": c > 0})
+        by_round[r_max] = {
+            cond: {"items": len(cells), "items_solved": sum(c["solved"] for c in cells),
+                   **{f"pass@{k}": _mean_over_items(cells, f"pass@{k}") for k in ks}}
+            for cond, cells in sorted(by_cond.items())
+        }
+    pending = sum(r["repair_round"] is not None and r["verdict"] is None for r in records)
+    return {"settings": settings, "by_round": by_round, "ungraded_attempts": pending}
 
 
 def _by(records: list[dict], keys: tuple[str, ...]) -> dict:
@@ -180,6 +233,17 @@ def render_markdown(summary: dict) -> str:
     if gen:
         lines += [
             "Generation: " + ", ".join(f"`{k}={v}`" for k, v in gen.items()),
+            "",
+        ]
+    canaries = summary.get("canaries")
+    if canaries:
+        ok = canaries["items_solved"] == canaries["items"]
+        lines += [
+            f"**Pipeline canaries: {canaries['items_solved']}/{canaries['items']} trivial "
+            f"items solved at least once** "
+            + ("(pipeline looks healthy)." if ok else
+               f"-- unsolved: {', '.join(canaries['unsolved'])}. Check these before "
+               "trusting any benchmark number below."),
             "",
         ]
     t = summary["totals"]
@@ -226,6 +290,18 @@ def render_markdown(summary: dict) -> str:
             + f" | {cell['statement_edited_would_pass']} | {cell['truncated']}"
             f" | {_fmt(cell['median_completion_tokens'])} |"
         )
+    repair = summary.get("repair")
+    if repair:
+        lines += ["", "## Repair rounds (pass within r rounds of compiler feedback)", "",
+                  f"Settings: {repair['settings']}. Attempts awaiting a grade: "
+                  f"{repair['ungraded_attempts']}.", "",
+                  "| rounds | condition | items | solved | "
+                  + " | ".join(f"pass@{k}" for k in ks) + " |",
+                  "|---|---|---|---|" + "---|" * len(ks)]
+        for r_max, conds in repair["by_round"].items():
+            for cond, s in conds.items():
+                lines.append(f"| ≤{r_max} | {cond} | {s['items']} | {s['items_solved']} | "
+                             + " | ".join(_fmt(s[f'pass@{k}']) for k in ks) + " |")
     if summary["gate_failure_reasons"]:
         lines += ["", "## Gate failure reasons", ""]
         lines += [f"- `{r}`: {n}" for r, n in summary["gate_failure_reasons"].items()]

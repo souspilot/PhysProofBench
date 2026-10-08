@@ -4,6 +4,14 @@ Every item's `source.book` field is a key into this file. Adding a new book
 means adding a section here first, with edition and provenance nailed down,
 before any items are ingested from it.
 
+## `CAN` — pipeline canaries (not a book)
+
+Trivial items (`role: canary` in `meta.yaml`) that exercise the whole
+pipeline: prompt with Core in context, extraction, statement gate, compile,
+axiom audit. Any working model should prove them. `summary.md` reports them
+first and separately; they never enter benchmark aggregates. Ids are
+`CAN_00_<NNN>_001`. Statements and proofs are written by the contributor.
+
 ## `SM` — Statistical Mechanics: A Mathematical Introduction
 
 - **Authors:** Sacha Friedli and Yvan Velenik

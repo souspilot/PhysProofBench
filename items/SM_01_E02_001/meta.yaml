@@ -32,6 +32,7 @@ modes:
 - autoform
 nl:
   statement: nl.md#statement
+  proof: nl.md#proof
 difficulty:
   decl_count: 3
   band: small

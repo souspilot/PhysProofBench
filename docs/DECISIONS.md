@@ -89,10 +89,12 @@ pipeline, to get real model outputs to look at early. Maintainer's choices:
   without removing it.
 - **Chapters 1–3 only**, to keep `Core` small. New `Core` modules:
   `Spin`, `Ising`, `CurieWeiss`, `LatticeGas`, `Thermo`.
-- **Exercises have no `nl.proof`.** The source gives no proof for its
-  exercises (or for eqn. (2.11)), so per `plan.md` §4 `nl.proof` is omitted
-  there, and those 6 items (`E01`, `E02`, `E03`, `E05`, `E06`, `Q11`) run
-  only in the `no_nl_proof` conditions.
+- **Exercises have no `nl.proof`** *(superseded 2026-10-08)*. Originally
+  omitted because the main text gives no proof for its exercises. Now filled
+  in from the book's solutions appendix (paraphrased). For eqn. (2.11), which
+  the appendix doesn't solve, the proof is a contributor expansion of the
+  main text's Stirling remark using Lemma B.3, labelled as such in `nl.md`.
+  Every item now runs in both conditions.
 - **Partial items:** where a source result has several independent parts or
   boundary conditions, only one is formalized as `_001`, noted in its
   `notes.md`: Lemma 3.5 (free boundary condition only), Theorem 2.2 (part 1
@@ -121,3 +123,64 @@ drafting and checking complete Lean proofs inside its reasoning. Decided:
   completions endpoint), because chat templates such as Qwen3's insert an
   empty `<think></think>` before a final assistant message that has no
   closing tag, which corrupts an unfinished-reasoning prefix.
+
+## Compiler-feedback repair (after grading the first pilot)
+
+One-shot results were 0/72. The failures were Lean/Mathlib fluency rather
+than mathematics: names that don't exist in the pinned Mathlib (192
+unknown-identifier errors), Lean 3 syntax, small tactic slips, and helper
+lemmas placed before the theorem. Proof strategies were often right
+(`SM_01_E02_001`). The maintainer chose a compiler-feedback repair loop
+(`repair.py`):
+
+- **Metric:** "pass within r repair rounds" is reported next to one-shot
+  pass@k, never merged into it.
+- **Context per round:** original prompt + the latest answer (final text
+  only) + feedback. Not the whole history, so prompts stay bounded. The
+  feedback (versioned `fb-v1`) has up to 12 Lean errors with goal states and
+  the checked file with line numbers. Gate failures are explained in words,
+  e.g. for `statement_edited`: keep the statement, put helpers inside the
+  proof with `have`. The grading rules themselves are unchanged.
+- **Per-round budget:** 16k tokens of thinking + answer, then a forced
+  answer (16k) if needed, the same protocol as `generate` + `force-answer`.
+- **Generation and grading stay split:** `repair --follow` (GPU) and
+  `grade-run --follow` (CPU) pipeline per sample through the run directory.
+
+## Pipeline canaries and NL proofs for exercises (2026-10-08)
+
+- **Canaries:** four trivial items (`CAN_00_00{1..4}_001`, `role: canary`)
+  with verified reference proofs. `summary.md` reports them first and keeps
+  them out of every aggregate. If a capable model fails them, suspect the
+  pipeline before the model.
+- **NL proofs for all exercise items**, from the book's solutions appendix
+  (`book/solutions.pdf`, kept out of git), paraphrased per
+  `CONTRIBUTING.md`. With these, all four conditions can run on every item
+  once `autoform` mode exists.
+
+## Two Mathlib pins (2026-10-08)
+
+Maintainer's decision, to keep Mathlib version drift from penalizing
+models trained on an older library:
+
+- **Pins:** `lean/` (Lean/Mathlib v4.34, the main pin) and `lean-v4.9/`
+  (Mathlib tag `v4.9.0-rc1` on `leanprover/lean4:v4.9.0-rc1`). That is the
+  protocol Pythagoras-Prover is evaluated under, and Goedel-Prover-V2 /
+  DeepSeek-Prover use Lean 4.9 too. Published evidence of the drift cost:
+  Goedel-Prover-V2-32B drops from 90% to 80% on miniF2F, and from 86% to 75%
+  on PutnamBench, moving from Mathlib for 4.9 to 4.19 (ProofOptimizer,
+  arXiv:2510.15700).
+- **Same statements:** item statements are textually identical across pins
+  (`tests/test_pins.py`); only `import` lines differ (`import Mathlib` on
+  the old pin). Core is copied verbatim, again apart from imports, so the
+  definitions are the same text on both.
+- **Caveat: same theorem, different library.** An item can be harder on
+  the old pin. The seed item's v4.34 reference proof fails on 4.9 because
+  the Jensen equality-case lemma (`StrictConcaveOn.map_sum_eq_iff_of_nonneg`)
+  did not exist yet. Results are always labelled with their pin (recorded
+  in each run's `config.json`). Claims of cross-pin comparability need a
+  reference proof on each pin; so far that holds only for the canaries.
+- **Tooling:** runs record `generation.lean_project` plus `pin` (toolchain,
+  Mathlib revision). `grade-run` defaults to the run's pin. The sandbox and
+  `lean-check` handle the old Lake's environment and build layout.
+  `scripts/setup-pin.sh` works around orphaned dependency commits and, on
+  macOS, a dyld rejection of old binaries.

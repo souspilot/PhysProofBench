@@ -232,7 +232,9 @@ def _generation_options(f):
         click.option("--items-dir", type=click.Path(exists=True, path_type=Path),
                      default=Path("items"), show_default=True),
         click.option("--lean-project", type=click.Path(exists=True, path_type=Path),
-                     default=Path("lean"), show_default=True),
+                     default=Path("lean"), show_default=True,
+                     help="Mathlib pin: `lean` (v4.34) or `lean-v4.9` (Lean 4.9-era, what "
+                     "most specialist provers were trained on). Recorded in the run."),
     ]
     for option in reversed(options):
         f = option(f)
@@ -285,6 +287,7 @@ def _build_config_and_plan(model, items, conditions, temperature, top_p, top_k,
         enable_thinking=thinking,
         core_in_context=core_in_context,
         seed=seed,
+        lean_project=str(lean_project),
     )
     plan = build_plan(
         config=config,
@@ -510,12 +513,124 @@ def extend(source_dir, run_dir, max_tokens, answer_reserve, concurrency, items, 
     raise SystemExit(1 if stats.aborted else 0)
 
 
+@main.command()
+@click.option("--from", "source_dir", required=True,
+              type=click.Path(exists=True, path_type=Path),
+              help="A graded run (its attempts become round 0).")
+@click.option("--run-dir", required=True, type=click.Path(path_type=Path),
+              help="New run directory for the repair rounds.")
+@click.option("--rounds", type=int, default=3, show_default=True,
+              help="Repair rounds per sample (stops early at a pass).")
+@click.option("--max-tokens", type=int, default=16384, show_default=True,
+              help="Thinking + answer budget per repair round.")
+@click.option("--answer-tokens", type=int, default=16384, show_default=True,
+              help="Forced-answer budget when a round runs out while thinking.")
+@click.option("--concurrency", type=int, default=12, show_default=True)
+@click.option("--follow/--no-follow", default=True, show_default=True,
+              help="Keep going as `grade-run --follow` grades each attempt, until "
+              "every sample passed or used all rounds. --no-follow: one pass, then exit.")
+@click.option("--poll-interval", type=float, default=30.0, show_default=True)
+@click.option("--items", default="all", show_default=True)
+@click.option("--samples", "-k", type=int, default=None,
+              help="Only sample indices < k (e.g. 1 for a cheap first look).")
+@click.option("--request-timeout", type=float, default=0.0, show_default=True,
+              help="Client-side seconds per request; 0 = none.")
+def repair(source_dir, run_dir, rounds, max_tokens, answer_tokens, concurrency, follow,
+           poll_interval, items, samples, request_timeout):
+    """Generation side (GPU node): compiler-feedback repair rounds.
+
+    For each sample whose latest attempt failed grading, show the model its
+    answer plus Lean's errors and ask for a fixed file; repeat until it
+    passes or --rounds repairs are used. Pair with
+    `grade-run --run-dir <same> --follow` on a node with Lean. Resumable.
+    """
+    from .preflight import check_endpoint
+    from .repair import RepairConfig, repair_run
+
+    import json
+
+    model = json.loads((source_dir / "config.json").read_text(encoding="utf-8"))[
+        "generation"]["model"]
+    checks, _ = check_endpoint(model, on_check=lambda c: _echo_checks([c]))
+    if not all(c.ok for c in checks):
+        raise click.ClickException("preflight failed; nothing sent.")
+    rcfg = RepairConfig(rounds=rounds, max_tokens=max_tokens, answer_tokens=answer_tokens)
+    try:
+        stats = repair_run(
+            source_dir=source_dir, run_dir=run_dir, rcfg=rcfg, concurrency=concurrency,
+            request_timeout=request_timeout or None, follow=follow,
+            poll_interval=poll_interval, items=_csv(items), samples=samples,
+            log=lambda s: click.echo(s),
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    raise SystemExit(1 if stats.aborted else 0)
+
+
+@main.command("budget-curve")
+@click.option("--from", "source_dir", required=True,
+              type=click.Path(exists=True, path_type=Path),
+              help="Run whose reasoning traces are cut at each budget.")
+@click.option("--budgets", required=True,
+              help="Comma-separated thinking budgets in tokens, e.g. 4096,8192,16384.")
+@click.option("--answer-tokens", type=int, default=16384, show_default=True)
+@click.option("--concurrency", type=int, default=16, show_default=True)
+@click.option("--items", default="all", show_default=True)
+def budget_curve_cmd(source_dir, budgets, answer_tokens, concurrency, items):
+    """Generation side (GPU node): evaluate the same traces at several
+    thinking budgets, one derived run per budget (<run>@think<B>).
+
+    Natural answers that fit a budget are kept; longer traces are cut at
+    exactly B tokens and an answer is forced. Grade each derived run with
+    `grade-run`, then compare with `physproofbench curve`.
+    """
+    import json
+
+    from .budget import budget_curve
+    from .preflight import check_endpoint
+
+    model = json.loads((source_dir / "config.json").read_text(encoding="utf-8"))[
+        "generation"]["model"]
+    checks, _ = check_endpoint(model, on_check=lambda c: _echo_checks([c]))
+    if not all(c.ok for c in checks):
+        raise click.ClickException("preflight failed; nothing sent.")
+    try:
+        values = sorted({int(b) for b in budgets.split(",") if b.strip()})
+    except ValueError as exc:
+        raise click.BadParameter("--budgets must be comma-separated integers") from exc
+    try:
+        stats = budget_curve(source_dir=source_dir, budgets=values,
+                             answer_tokens=answer_tokens, concurrency=concurrency,
+                             items=_csv(items), log=lambda s: click.echo(s))
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    for s in stats:
+        click.echo(f"budget {s.budget}: {s.natural} natural, {s.forced} forced, "
+                   f"{s.skipped_short_trace} too short, {s.errors} errors")
+    raise SystemExit(1 if any(s.errors for s in stats) else 0)
+
+
+@main.command()
+@click.argument("run_dirs", nargs=-1, required=True,
+                type=click.Path(exists=True, path_type=Path))
+@click.option("--items-dir", type=click.Path(exists=True, path_type=Path),
+              default=Path("items"), show_default=True)
+def curve(run_dirs, items_dir):
+    """Pass rate vs. thinking budget across graded budget-curve runs
+    (e.g. `physproofbench curve runs/R@think*`). No model, no Lean."""
+    from .budget import curve_table
+
+    click.echo(curve_table(list(run_dirs), items_dir))
+
+
 def _grading_options(f):
     options = [
         click.option("--items-dir", type=click.Path(exists=True, path_type=Path),
                      default=Path("items"), show_default=True),
         click.option("--lean-project", type=click.Path(exists=True, path_type=Path),
-                     default=Path("lean"), show_default=True),
+                     default=None,
+                     help="Lean project (Mathlib pin) to grade with. Default: the run's own "
+                     "pin (grade-run), or `lean` (lean-check)."),
         click.option("--compile-timeout", type=float, default=300.0, show_default=True),
         click.option("--memory-cap-gb", type=float, default=32.0, show_default=True,
                      help="Virtual-memory cap per Lean compile (Linux only); 0 = none."),
@@ -537,6 +652,7 @@ def lean_check(items_dir, lean_project, compile_timeout, memory_cap_gb):
     """
     from .preflight import check_lean
 
+    lean_project = lean_project or Path("lean")
     checks = check_lean(lean_project, memory_cap_bytes=int(memory_cap_gb * _GiB) or None,
                         compile_timeout=compile_timeout)
     _echo_checks(checks)
@@ -566,10 +682,17 @@ def grade_run(run_dir, items_dir, lean_project, compile_timeout, memory_cap_gb,
     and samples are re-graded only if their grade is missing, stale (a
     newer grading version) or a grader error.
     """
+    import json
+
     from .batch import grade_run as _grade_run
     from .preflight import check_lean_env
     from .report import write_report
 
+    if lean_project is None:
+        stored = (json.loads((run_dir / "config.json").read_text(encoding="utf-8"))
+                  if (run_dir / "config.json").exists() else {})
+        lean_project = Path(stored.get("generation", {}).get("lean_project", "lean"))
+        click.echo(f"grading against the run's Mathlib pin: {lean_project}")
     if not follow and not (run_dir / "plan.json").exists():
         raise click.ClickException(
             f"{run_dir} has no plan.json: not a run written by `physproofbench "

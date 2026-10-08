@@ -151,6 +151,41 @@ token level through vLLM's `/tokenize` endpoint, so the chat template can't
 alter the unfinished turn. A fresh run can use the whole window directly
 with `generate --max-tokens full`.
 
+**Compiler-feedback repair.** A graded run can be continued with up to
+`--rounds` repair attempts per failed sample. Each attempt shows the model
+its latest answer, Lean's errors with line numbers and goal states, and its
+file numbered. The model rethinks under the same thinking-budget protocol,
+and attempts are graded as they land:
+
+```bash
+physproofbench repair --from runs/pilot --run-dir runs/pilot-repair --rounds 3   # GPU side
+physproofbench grade-run --run-dir runs/pilot-repair --follow                    # CPU side
+```
+
+A sample stops at its first pass. Earlier attempts are kept in
+`samples/.../attempts/<round>/` together with the feedback they produced.
+`summary.md` adds pass@k within ≤0, ≤1, … repair rounds, reported
+separately from one-shot pass@k.
+
+**Thinking-budget curves.** `physproofbench budget-curve --from runs/R
+--budgets 4096,8192,16384` evaluates the same traces at several thinking
+budgets, one derived run per budget (`runs/R@think<B>`). Grade each with
+`grade-run`, then compare them with `physproofbench curve runs/R@think*`.
+
+**Two Mathlib pins.** `lean/` pins Lean/Mathlib v4.34. `lean-v4.9/` pins
+Lean 4.9.0-rc1-era Mathlib, which today's specialist provers
+(Goedel-Prover-V2, Pythagoras-Prover) were trained on. Item statements are
+identical on both (enforced by `tests/test_pins.py`); only imports differ.
+Choose a pin with `generate --lean-project lean-v4.9`; it is recorded in the
+run, and `grade-run` uses it automatically. Set up a pin (internet needed,
+so run it on a login node) with:
+
+```bash
+scripts/setup-pin.sh lean-v4.9
+```
+
+The script also works around two problems specific to the old pin.
+
 Generation defaults: Qwen3-style thinking sampling (`--temperature 0.6
 --top-p 0.95 --top-k 20`), `--max-tokens 32768`, 16 concurrent requests, and
 the item's `PhysProofBench.Core` source in the prompt (`--core-in-context`).
