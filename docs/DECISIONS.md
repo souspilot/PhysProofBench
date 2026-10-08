@@ -89,10 +89,12 @@ pipeline, to get real model outputs to look at early. Maintainer's choices:
   without removing it.
 - **Chapters 1–3 only**, to keep `Core` small. New `Core` modules:
   `Spin`, `Ising`, `CurieWeiss`, `LatticeGas`, `Thermo`.
-- **Exercises have no `nl.proof`.** The source gives no proof for its
-  exercises (or for eqn. (2.11)), so per `plan.md` §4 `nl.proof` is omitted
-  there, and those 6 items (`E01`, `E02`, `E03`, `E05`, `E06`, `Q11`) run
-  only in the `no_nl_proof` conditions.
+- **Exercises have no `nl.proof`** *(superseded 2026-10-08)*. Originally
+  omitted because the main text gives no proof for its exercises. Now filled
+  in from the book's solutions appendix (paraphrased). For eqn. (2.11), which
+  the appendix doesn't solve, the proof is a contributor expansion of the
+  main text's Stirling remark using Lemma B.3, labelled as such in `nl.md`.
+  Every item now runs in both conditions.
 - **Partial items:** where a source result has several independent parts or
   boundary conditions, only one is formalized as `_001`, noted in its
   `notes.md`: Lemma 3.5 (free boundary condition only), Theorem 2.2 (part 1
@@ -143,3 +145,14 @@ lemmas placed before the theorem. Proof strategies were often right
   answer (16k) if needed, the same protocol as `generate` + `force-answer`.
 - **Generation and grading stay split:** `repair --follow` (GPU) and
   `grade-run --follow` (CPU) pipeline per sample through the run directory.
+
+## Pipeline canaries and NL proofs for exercises (2026-10-08)
+
+- **Canaries:** four trivial items (`CAN_00_00{1..4}_001`, `role: canary`)
+  with verified reference proofs. `summary.md` reports them first and keeps
+  them out of every aggregate. If a capable model fails them, suspect the
+  pipeline before the model.
+- **NL proofs for all exercise items**, from the book's solutions appendix
+  (`book/solutions.pdf`, kept out of git), paraphrased per
+  `CONTRIBUTING.md`. With these, all four conditions can run on every item
+  once `autoform` mode exists.

@@ -24,6 +24,10 @@ Justification = Literal[
 ]
 DifficultyBand = Literal["very_small", "small", "moderate", "large", "very_large"]
 Mode = Literal["proof", "autoform"]
+# `canary`: trivial pipeline-sanity items (book `CAN`, docs/SOURCE.md). Any
+# working model should pass them; they are reported separately and never
+# counted in benchmark aggregates.
+Role = Literal["benchmark", "canary"]
 
 
 class Source(BaseModel):
@@ -80,6 +84,7 @@ class ItemMeta(BaseModel):
     library_gaps: list[str] = Field(default_factory=list)
     contributed_by: str
     reviewed_by: list[str] = Field(default_factory=list)
+    role: Role = "benchmark"
 
     @model_validator(mode="after")
     def _check_id_pattern(self) -> "ItemMeta":

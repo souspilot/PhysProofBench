@@ -21,6 +21,8 @@ runs/*/
 !runs/.gitkeep
 
 book/main.txt
+# Solutions appendix (copyrighted): local reference only, never commit.
+book/solutions.pdf
 
 # Local harness state (scheduled-wakeup lock etc.), not project content
 .claude/

@@ -12,11 +12,6 @@
 - `N^{-1/2}` is `(N : ℝ) ^ (-(1/2 : ℝ))` (`Real.rpow`).
 - `m = ±1` (`k = 0` or `k = N`) relies on Mathlib's `Real.log 0 = 0`, which
   gives the `0 log 0 = 0` convention, as in `Core/Probability.lean`.
-- The source gives no proof (it is an exercise), so `nl.proof` is omitted and
-  the A2/B2 (`with_nl_proof`) conditions do not apply to this item.
-- **No `## proof` in `nl.md`.** The source leaves this as an exercise and
-  gives no proof, so per `plan.md` §4 `nl.proof` is omitted. Only the
-  `no_nl_proof` conditions (A1, B1) apply to this item.
 
 ## Hidden assumptions
 
@@ -41,3 +36,8 @@ with `sorry` against the pinned toolchain (`lake build PhysProofBench`).
 
 - Not yet through the two-reviewer process (`reviewed_by: []`).
 - Check fidelity of the formalization decisions above against the source.
+
+## NL proof source
+
+`nl.md#proof` follows the source's main-text remark that (2.11) follows from Stirling's formula, expanded by the contributor using the source's Lemma B.3 (the source leaves it as Exercise 2.1 and gives no solution) (2026-10-08). It was added so
+the `with_nl_proof` conditions apply to this item.

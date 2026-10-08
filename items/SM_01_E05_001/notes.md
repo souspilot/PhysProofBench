@@ -18,9 +18,6 @@
   is used only here, and inline keeps the item file self-contained. It is
   written twice rather than with `let`, because the L2.3 signature parser
   (`audit.parse_theorem_signature`) stops at the first depth-0 `:=`.
-- **No `## proof` in `nl.md`.** The source leaves this as an exercise and
-  gives no proof, so per `plan.md` §4 `nl.proof` is omitted. Only the
-  `no_nl_proof` conditions (A1, B1) apply to this item.
 
 ## Hidden assumptions
 
@@ -45,3 +42,8 @@ with `sorry` against the pinned toolchain (`lake build PhysProofBench`).
 
 - Not yet through the two-reviewer process (`reviewed_by: []`).
 - Check fidelity of the formalization decisions above against the source.
+
+## NL proof source
+
+`nl.md#proof` follows the source's solution to Exercise 1.5 (Appendix C), with its graphical argument written out (2026-10-08). It was added so
+the `with_nl_proof` conditions apply to this item.

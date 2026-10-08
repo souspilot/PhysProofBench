@@ -78,9 +78,19 @@ def _grade(tmp_path, grader, **kw):
                      grade_fn=grader, log=lambda s: None, **kw)
 
 
-def test_plan_skips_with_nl_proof_when_source_has_no_proof():
+def test_plan_skips_with_nl_proof_when_source_has_no_proof(monkeypatch):
+    from physproofbench import batch as batch_module
+
+    real = batch_module.load_item_meta
+
+    def without_proof(path):  # simulate an item whose source gives no proof
+        meta = real(path)
+        if meta.id == "SM_01_E06_001":
+            meta.nl.proof = None
+        return meta
+
+    monkeypatch.setattr(batch_module, "load_item_meta", without_proof)
     plan = _plan(GenerationConfig(model="m"))
-    # SM_01_E06_001 is an exercise: no nl.proof, so no A2 cell.
     assert ("SM_01_E06_001", "with_nl_proof") not in plan.prompts
     assert any(s[:2] == ("SM_01_E06_001", "with_nl_proof") for s in plan.skipped)
     assert len(plan.tasks) == 3 * 2
@@ -91,7 +101,7 @@ def test_resume_skips_finished_samples(tmp_path):
     plan = _plan(config)
     first = FakeModel()
     _run(tmp_path, config, plan, first)
-    assert len(first.calls) == 6
+    assert len(first.calls) == 8
     sample = tmp_path / "samples/SM_01_009_001/no_nl_proof/000"
     record = json.loads((sample / "completion.json").read_text())
     assert record["finish_reason"] == "stop"
@@ -105,7 +115,7 @@ def test_resume_skips_finished_samples(tmp_path):
     # Extending the run to more samples generates only the new ones.
     more = FakeModel()
     _run(tmp_path, config, _plan(config, samples=3), more)
-    assert len(more.calls) == 3
+    assert len(more.calls) == 4
 
 
 def test_changed_prompt_is_regenerated(tmp_path):
@@ -202,8 +212,8 @@ def test_report_from_stored_results(tmp_path, monkeypatch):
     cell = summary["per_item_condition"]["SM_01_009_001|no_nl_proof"]
     assert cell["passed"] == 1 and cell["pass@1"] == pytest.approx(0.5)
     assert cell["pass@2"] == 1.0
-    assert summary["gate_failure_reasons"] == {"gate: statement_edited": 5}
-    assert summary["totals"]["statement_edited_would_pass"] == 5
+    assert summary["gate_failure_reasons"] == {"gate: statement_edited": 7}
+    assert summary["totals"]["statement_edited_would_pass"] == 7
     md = write_report(tmp_path, ITEMS)
     assert "SM_01_E06_001" in md and (tmp_path / "summary.json").exists()
 
@@ -212,12 +222,12 @@ def test_generate_writes_plan_and_status(tmp_path):
     config = GenerationConfig(model="m")
     _run(tmp_path, config, _plan(config, samples=1), FakeModel())
     tasks, gold_shas = read_plan(tmp_path)
-    assert len(tasks) == 3 and set(gold_shas) == {"SM_01_009_001", "SM_01_E06_001"}
+    assert len(tasks) == 4 and set(gold_shas) == {"SM_01_009_001", "SM_01_E06_001"}
     assert json.loads((tmp_path / "status.json").read_text())["state"] == "finished"
     # Extending the run merges into plan.json rather than replacing it.
     _run(tmp_path, config, _plan(config, items=("SM_03_005_001",), samples=1), FakeModel())
     tasks, gold_shas = read_plan(tmp_path)
-    assert len(tasks) == 5 and "SM_03_005_001" in gold_shas
+    assert len(tasks) == 6 and "SM_03_005_001" in gold_shas
 
 
 def test_grade_run_grades_once_and_resumes(tmp_path):
@@ -225,7 +235,7 @@ def test_grade_run_grades_once_and_resumes(tmp_path):
     _run(tmp_path, config, _plan(config, samples=2), FakeModel())
     grader = FakeGrader()
     stats = _grade(tmp_path, grader)
-    assert stats.graded == 6 and stats.passed == 4
+    assert stats.graded == 8 and stats.passed == 4
     assert all(c["diagnose_statement_edits"] for c in grader.calls)
     again = FakeGrader()
     assert _grade(tmp_path, again).graded == 0 and again.calls == []
@@ -471,3 +481,21 @@ def test_extend_ignores_forced_answer_and_continues_the_real_trace(tmp_path):
     assert FORCE_ANSWER_PHRASE not in cont.calls[0]["prefix"]
     record = json.loads((tmp_path / "dst/samples/SM_01_009_001/no_nl_proof/000/completion.json").read_text())
     assert record["text"] == "real answer" and "forced_answer" not in record
+
+
+def test_canaries_are_reported_separately_and_kept_out_of_aggregates(tmp_path):
+    config = GenerationConfig(model="m")
+    plan = _plan(config, items=("SM_01_009_001", "CAN_00_002_001"),
+                 conditions=("no_nl_proof",), samples=1)
+    _run(tmp_path, config, plan, FakeModel())
+    for task in plan.tasks:
+        d = task.dir(tmp_path)
+        sha = json.loads((d / "completion.json").read_text())["candidate_sha"]
+        verdict = "pass" if task.item_id.startswith("CAN") else "compile_fail"
+        (d / "grade.json").write_text(json.dumps({"verdict": verdict, "candidate_sha": sha}))
+    summary = summarize(tmp_path, ITEMS)
+    assert summary["canaries"]["items_solved"] == 1
+    assert "CAN_00_002_001|no_nl_proof" not in summary["per_item_condition"]
+    assert summary["aggregates"]["condition"]["no_nl_proof"]["items"] == 1
+    assert summary["totals"]["passed"] == 0
+    assert "Pipeline canaries: 1/1" in write_report(tmp_path, ITEMS)

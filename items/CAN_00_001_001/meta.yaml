@@ -1,21 +1,19 @@
-id: SM_01_E06_001
+id: CAN_00_001_001
 schema_version: 1
 status: draft
+role: canary
 source:
-  book: SM
-  chapter: 1
-  item_label: Exercise 1.6
-  pages:
-  - 21
+  book: CAN
+  chapter: 0
+  item_label: canary 001
+  pages: []
 topic:
-- statistical-mechanics
-- entropy
-- convexity
+- canary
 proof_kind: exact
 hidden_assumptions: []
-lean_file: lean/PhysProofBench/Items/SM_01_E06_001.lean
-decl_name: shannonEntropy_concave
-solution_file: lean/PhysProofBenchSolutions/SM_01_E06_001.lean
+lean_file: lean/PhysProofBench/Items/CAN_00_001_001.lean
+decl_name: uniformDist_isProbDist
+solution_file: lean/PhysProofBenchSolutions/CAN_00_001_001.lean
 imports_physlib: false
 modes:
 - proof
@@ -24,8 +22,8 @@ nl:
   statement: nl.md#statement
   proof: nl.md#proof
 difficulty:
-  decl_count: 5
-  band: small
+  decl_count: 0
+  band: very_small
 depends_on: []
 core_deps:
 - PhysProofBench.Core.Probability
