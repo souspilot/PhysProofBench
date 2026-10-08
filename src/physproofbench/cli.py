@@ -564,6 +564,62 @@ def repair(source_dir, run_dir, rounds, max_tokens, answer_tokens, concurrency, 
     raise SystemExit(1 if stats.aborted else 0)
 
 
+@main.command("budget-curve")
+@click.option("--from", "source_dir", required=True,
+              type=click.Path(exists=True, path_type=Path),
+              help="Run whose reasoning traces are cut at each budget.")
+@click.option("--budgets", required=True,
+              help="Comma-separated thinking budgets in tokens, e.g. 4096,8192,16384.")
+@click.option("--answer-tokens", type=int, default=16384, show_default=True)
+@click.option("--concurrency", type=int, default=16, show_default=True)
+@click.option("--items", default="all", show_default=True)
+def budget_curve_cmd(source_dir, budgets, answer_tokens, concurrency, items):
+    """Generation side (GPU node): evaluate the same traces at several
+    thinking budgets, one derived run per budget (<run>@think<B>).
+
+    Natural answers that fit a budget are kept; longer traces are cut at
+    exactly B tokens and an answer is forced. Grade each derived run with
+    `grade-run`, then compare with `physproofbench curve`.
+    """
+    import json
+
+    from .budget import budget_curve
+    from .preflight import check_endpoint
+
+    model = json.loads((source_dir / "config.json").read_text(encoding="utf-8"))[
+        "generation"]["model"]
+    checks, _ = check_endpoint(model, on_check=lambda c: _echo_checks([c]))
+    if not all(c.ok for c in checks):
+        raise click.ClickException("preflight failed; nothing sent.")
+    try:
+        values = sorted({int(b) for b in budgets.split(",") if b.strip()})
+    except ValueError as exc:
+        raise click.BadParameter("--budgets must be comma-separated integers") from exc
+    try:
+        stats = budget_curve(source_dir=source_dir, budgets=values,
+                             answer_tokens=answer_tokens, concurrency=concurrency,
+                             items=_csv(items), log=lambda s: click.echo(s))
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    for s in stats:
+        click.echo(f"budget {s.budget}: {s.natural} natural, {s.forced} forced, "
+                   f"{s.skipped_short_trace} too short, {s.errors} errors")
+    raise SystemExit(1 if any(s.errors for s in stats) else 0)
+
+
+@main.command()
+@click.argument("run_dirs", nargs=-1, required=True,
+                type=click.Path(exists=True, path_type=Path))
+@click.option("--items-dir", type=click.Path(exists=True, path_type=Path),
+              default=Path("items"), show_default=True)
+def curve(run_dirs, items_dir):
+    """Pass rate vs. thinking budget across graded budget-curve runs
+    (e.g. `physproofbench curve runs/R@think*`). No model, no Lean."""
+    from .budget import curve_table
+
+    click.echo(curve_table(list(run_dirs), items_dir))
+
+
 def _grading_options(f):
     options = [
         click.option("--items-dir", type=click.Path(exists=True, path_type=Path),

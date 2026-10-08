@@ -258,3 +258,22 @@ def complete_continuation(
         elapsed_s=elapsed,
         max_tokens_sent=max_tokens,
     )
+
+
+def count_and_truncate_tokens(
+    text: str, max_tokens: int, *, model: str, timeout: float | None = 120.0
+) -> tuple[int, str]:
+    """(token count of `text`, `text` cut to its first `max_tokens` tokens),
+    using the server's own tokenizer (vLLM /tokenize, /detokenize)."""
+    base_url = os.environ.get("OPENAI_BASE_URL")
+    if not base_url:
+        raise RuntimeError("OPENAI_BASE_URL is not set")
+    root = _server_root(base_url)
+    ids = _post_json(f"{root}/tokenize",
+                     {"model": model, "prompt": text, "add_special_tokens": False},
+                     timeout)["tokens"]
+    if len(ids) <= max_tokens:
+        return len(ids), text
+    cut = _post_json(f"{root}/detokenize", {"model": model, "tokens": ids[:max_tokens]},
+                     timeout)["prompt"]
+    return len(ids), cut
