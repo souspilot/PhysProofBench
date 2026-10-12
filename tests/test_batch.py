@@ -499,3 +499,17 @@ def test_canaries_are_reported_separately_and_kept_out_of_aggregates(tmp_path):
     assert summary["aggregates"]["condition"]["no_nl_proof"]["items"] == 1
     assert summary["totals"]["passed"] == 0
     assert "Pipeline canaries: 1/1" in write_report(tmp_path, ITEMS)
+
+
+def test_canary_only_run_report_counts_all_samples(tmp_path):
+    config = GenerationConfig(model="m")
+    plan = _plan(config, items=("CAN_00_002_001",), conditions=("no_nl_proof",), samples=2)
+    _run(tmp_path, config, plan, FakeModel())
+    for task in plan.tasks:
+        d = task.dir(tmp_path)
+        sha = json.loads((d / "completion.json").read_text())["candidate_sha"]
+        (d / "grade.json").write_text(json.dumps({"verdict": "pass", "candidate_sha": sha}))
+    md = write_report(tmp_path, ITEMS)
+    assert "2/2 planned samples generated, 0 not yet graded" in md
+    assert "| CAN_00_002_001 | no_nl_proof | 2 | 2 |" in md
+    assert "No benchmark (non-canary) samples in this run." in md

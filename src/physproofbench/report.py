@@ -167,6 +167,8 @@ def summarize(run_dir: Path, items_dir: Path) -> dict:
         "generation": config.get("generation"),
         "ks": ks,
         "totals": _group_stats(records, ks),
+        # Every sample incl. canaries: for progress lines, not for scores.
+        "all_totals": _group_stats(all_records, ks),
         "per_item_condition": per_cell,
         "aggregates": aggregates,
         "gate_failure_reasons": dict(gate_reasons.most_common()),
@@ -245,17 +247,33 @@ def render_markdown(summary: dict) -> str:
                f"-- unsolved: {', '.join(canaries['unsolved'])}. Check these before "
                "trusting any benchmark number below."),
             "",
+            "| canary | condition | n | pass | " + " | ".join(VERDICTS[1:])
+            + " | truncated | median tokens |",
+            "|---|---|---|---|" + "---|" * (len(VERDICTS) - 1) + "---|---|",
         ]
-    t = summary["totals"]
-    ungraded = t["generated"] - t["graded"]
+        for cell in canaries["cells"].values():
+            v = cell["verdicts"]
+            lines.append(
+                f"| {cell['item_id']} | {cell['condition']} | {cell['graded']} | "
+                f"{cell['passed']} | " + " | ".join(str(v.get(x, 0)) for x in VERDICTS[1:])
+                + f" | {cell['truncated']} | {_fmt(cell['median_completion_tokens'])} |")
+        lines.append("")
+    a = summary.get("all_totals") or summary["totals"]
+    ungraded = a["generated"] - a["graded"]
     lines += [
         f"Generation state: **{summary.get('generation_state')}**; "
-        f"{t['generated']}/{summary.get('planned')} planned samples generated, "
+        f"{a['generated']}/{summary.get('planned')} planned samples generated, "
         f"{ungraded} not yet graded."
         + (" Numbers below are partial." if ungraded or summary.get("generation_state")
            != "finished" else ""),
         "",
-        f"Samples: {t['samples']} ({t['generated']} generated, {t['graded']} graded, "
+    ]
+    t = summary["totals"]
+    if not t["samples"]:
+        lines.append("No benchmark (non-canary) samples in this run.")
+        return "\n".join(lines) + "\n"
+    lines += [
+        f"Benchmark samples: {t['samples']} ({t['generated']} generated, {t['graded']} graded, "
         f"{t['passed']} passed). Truncated at token limit: {t['truncated']}. "
         f"No ```lean fence: {t['no_lean_fence']}. Compile timeouts: {t['compile_timeouts']}. "
         f"Rejected as statement_edited but otherwise correct: {t['statement_edited_would_pass']}. "
