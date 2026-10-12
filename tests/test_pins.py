@@ -33,3 +33,14 @@ def test_item_statements_identical_across_pins(pin):
 def test_core_modules_present_on_every_pin(pin):
     for core in (MAIN / "Core").glob("*.lean"):
         assert (pin / "PhysProofBench" / "Core" / core.name).exists(), core.name
+
+
+def test_every_canary_has_a_reference_proof_fixture():
+    """The oracle run (scripts/oracle_server.py) needs one per canary."""
+    import yaml
+
+    fixtures = REPO / "tests" / "fixtures" / "canary_proofs"
+    for meta_path in (REPO / "items").glob("CAN_*/meta.yaml"):
+        meta = yaml.safe_load(meta_path.read_text())
+        assert meta["role"] == "canary"
+        assert (fixtures / f"{meta['id']}.lean").exists(), meta["id"]

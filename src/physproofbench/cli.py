@@ -623,6 +623,17 @@ def curve(run_dirs, items_dir):
     click.echo(curve_table(list(run_dirs), items_dir))
 
 
+def _usable_cores() -> int:
+    """CPU cores this process may run on (respects cgroup/affinity limits
+    such as a login node's, which os.cpu_count() would not show)."""
+    import os
+
+    try:
+        return max(1, len(os.sched_getaffinity(0)))
+    except AttributeError:  # macOS
+        return max(1, os.cpu_count() or 1)
+
+
 def _grading_options(f):
     options = [
         click.option("--items-dir", type=click.Path(exists=True, path_type=Path),
@@ -698,6 +709,13 @@ def grade_run(run_dir, items_dir, lean_project, compile_timeout, memory_cap_gb,
             f"{run_dir} has no plan.json: not a run written by `physproofbench "
             "generate` (or generation hasn't started; use --follow to wait for it).")
 
+    cores = _usable_cores()
+    if grade_workers > cores:
+        click.echo(f"WARNING: only {cores} CPU core(s) usable here; capping --grade-workers "
+                   f"{grade_workers} -> {cores}. Compiles are CPU-bound, so extra workers "
+                   "only slow each other down and turn slow-but-finishing proofs into "
+                   "timeouts (the timeout is wall-clock). Grade on a compute node.")
+        grade_workers = cores
     checks = check_lean_env(lean_project)
     if not all(c.ok for c in checks):
         _echo_checks(checks)

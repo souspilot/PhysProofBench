@@ -7,5 +7,6 @@ Core-in-context) before the model.
 
 ## Reference proof
 
-`lean/PhysProofBenchSolutions/CAN_00_001_001.lean` (private repo). Graded `pass` by
+`tests/fixtures/canary_proofs/CAN_00_001_001.lean` (public: canaries are not
+benchmark items). Also passes on the `lean-v4.9` pin. Graded `pass` by
 the real grader (axioms: propext, Classical.choice, Quot.sound), 2026-10-08.

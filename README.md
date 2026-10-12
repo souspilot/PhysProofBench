@@ -89,6 +89,29 @@ wired automatically into `grading.py` (see its docstring). No chapter has
 been censused. See `plan.md` for the full milestone list and
 `docs/DECISIONS.md` for choices made so far.
 
+## Validating a setup before trusting any score
+
+Work bottom-up. Each step has one expected result, so a surprise points to
+a single cause:
+
+| Step | Run | Expected | Otherwise |
+|---|---|---|---|
+| 0. Oracle | `scripts/oracle_server.py` answers every prompt with the known-correct proof; the real `generate` → `grade-run` on the canaries, on each pin | 100% pass | pipeline bug |
+| 1. Plain-Mathlib canaries | a real model on `CAN_00_005_001`, `CAN_00_006_001` (no custom definitions) | ≈100% for a capable prover | prompt/format problem |
+| 2. Core canaries | a real model on `CAN_00_001…004_001` (our definitions) | informative | can the model use our definitions? |
+| 3. Benchmark items | the real run | — | meaningful only once 0–2 hold |
+
+```bash
+python scripts/oracle_server.py --port 8100 &
+OPENAI_BASE_URL=http://127.0.0.1:8100/v1 physproofbench generate --model oracle \
+    --run-dir runs/oracle-lean --items CAN_00_001_001,CAN_00_002_001,CAN_00_003_001,CAN_00_004_001,CAN_00_005_001,CAN_00_006_001 -k 1
+physproofbench grade-run --run-dir runs/oracle-lean
+```
+
+For the old pin, repeat with `--lean-project lean-v4.9` and another
+`--run-dir`. The canary reference proofs are public, in
+`tests/fixtures/canary_proofs/` (canaries are not benchmark items).
+
 ## Running a batch (pilot study)
 
 A batch run has two phases, run as separate commands so GPU time is never
