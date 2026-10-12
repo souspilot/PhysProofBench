@@ -248,15 +248,16 @@ def render_markdown(summary: dict) -> str:
                "trusting any benchmark number below."),
             "",
             "| canary | condition | n | pass | " + " | ".join(VERDICTS[1:])
-            + " | truncated | median tokens |",
-            "|---|---|---|---|" + "---|" * (len(VERDICTS) - 1) + "---|---|",
+            + " | of which timeouts | truncated | median tokens |",
+            "|---|---|---|---|" + "---|" * (len(VERDICTS) - 1) + "---|---|---|",
         ]
         for cell in canaries["cells"].values():
             v = cell["verdicts"]
             lines.append(
                 f"| {cell['item_id']} | {cell['condition']} | {cell['graded']} | "
                 f"{cell['passed']} | " + " | ".join(str(v.get(x, 0)) for x in VERDICTS[1:])
-                + f" | {cell['truncated']} | {_fmt(cell['median_completion_tokens'])} |")
+                + f" | {cell['compile_timeouts']} | {cell['truncated']}"
+                f" | {_fmt(cell['median_completion_tokens'])} |")
         lines.append("")
     a = summary.get("all_totals") or summary["totals"]
     ungraded = a["generated"] - a["graded"]
@@ -295,8 +296,8 @@ def render_markdown(summary: dict) -> str:
         "## Per item",
         "",
         "| item | kind | condition | n | pass | " + " | ".join(f"pass@{k}" for k in ks)
-        + " | " + " | ".join(VERDICTS[1:]) + " | edited-but-correct | truncated | median tokens |",
-        "|---|---|---|---|---|" + "---|" * len(ks) + "---|" * (len(VERDICTS) - 1) + "---|---|---|",
+        + " | " + " | ".join(VERDICTS[1:]) + " | of which timeouts | edited-but-correct | truncated | median tokens |",
+        "|---|---|---|---|---|" + "---|" * len(ks) + "---|" * (len(VERDICTS) - 1) + "---|---|---|---|",
     ]
     for cell in summary["per_item_condition"].values():
         v = cell["verdicts"]
@@ -305,7 +306,8 @@ def render_markdown(summary: dict) -> str:
             f"{cell['graded']} | {cell['passed']} | "
             + " | ".join(_fmt(cell[f"pass@{k}"]) for k in ks) + " | "
             + " | ".join(str(v.get(x, 0)) for x in VERDICTS[1:])
-            + f" | {cell['statement_edited_would_pass']} | {cell['truncated']}"
+            + f" | {cell['compile_timeouts']} | {cell['statement_edited_would_pass']}"
+            f" | {cell['truncated']}"
             f" | {_fmt(cell['median_completion_tokens'])} |"
         )
     repair = summary.get("repair")
