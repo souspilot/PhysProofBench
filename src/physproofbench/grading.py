@@ -29,7 +29,7 @@ Verdict = Literal["pass", "gate_fail", "compile_fail", "audit_fail"]
 # Bump whenever a change to grading could change a verdict (docs/GRADING.md).
 # The batch runner re-grades stored samples whose grade was produced under a
 # different version.
-GRADING_VERSION = "2"
+GRADING_VERSION = "3"
 
 # Compiler output kept in grade records; full logs of failing compiles can be
 # megabytes of elaboration traces, and the first errors are what matters.

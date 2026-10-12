@@ -21,6 +21,7 @@ from physproofbench.batch import (
     read_plan,
     sample_seed,
 )
+from physproofbench.grading import GRADING_VERSION
 from physproofbench.models.openai_client import Completion
 from physproofbench.render import load_core_source
 from physproofbench.report import pass_at_k, summarize, write_report
@@ -69,7 +70,7 @@ class FakeGrader:
         if self.fail:
             raise RuntimeError("lake exploded")
         verdict = "pass" if kwargs["decl_name"] == "shannonEntropy_le_log_card" else "compile_fail"
-        return SimpleNamespace(to_dict=lambda: {"verdict": verdict, "grading_version": "2",
+        return SimpleNamespace(to_dict=lambda: {"verdict": verdict, "grading_version": GRADING_VERSION,
                                                 "gate_failures": []})
 
 
