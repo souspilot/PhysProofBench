@@ -184,3 +184,19 @@ models trained on an older library:
   `lean-check` handle the old Lake's environment and build layout.
   `scripts/setup-pin.sh` works around orphaned dependency commits and, on
   macOS, a dyld rejection of old binaries.
+
+## Validation ladder (2026-10-12)
+
+Canary results from real models (Qwen 2/4, Pythagoras 1/4) were
+uninterpretable, because pipeline and model were never separated. Now:
+
+- **Oracle step:** `scripts/oracle_server.py` replays the known-correct
+  proofs through the real CLI. Verified locally: 12/12 on both `lean` and
+  `lean-v4.9`. The same check must pass on every new machine or pin before
+  any model run there is trusted.
+- **Two plain-Mathlib canaries** (`CAN_00_005_001`, `CAN_00_006_001`) with
+  no custom definitions, separating "can the model write Lean at all in our
+  harness" from "can it work with our Core definitions".
+- **Canary reference proofs** moved to the public
+  `tests/fixtures/canary_proofs/` (they are not benchmark items). A test
+  requires one per canary.
