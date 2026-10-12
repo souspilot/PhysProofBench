@@ -7,6 +7,8 @@
 #   scripts/setup-pin.sh lean-v4.9   # Lean 4.9-era pin (specialist provers)
 #
 # Workarounds needed for old pins, applied automatically:
+# - A package directory left half-cloned (e.g. by a git that failed mid-clone)
+#   is re-cloned.
 # - Some dependency revisions pinned by 2024 Mathlib are no longer on any
 #   branch, so `git clone` doesn't contain them and Lake's checkout fails
 #   ("git exited with code 128"). They are still fetchable by hash; this
@@ -23,7 +25,7 @@ for attempt in $(seq 1 15); do
   # `lake env` materializes dependencies from the committed lake-manifest.json
   # (it does not upgrade them, unlike `lake update`).
   out=$(lake env true 2>&1) || true
-  if ! echo "$out" | grep -q "exited with code 128"; then
+  if ! echo "$out" | grep -qE "external command 'git' exited with code [0-9]+"; then
     break
   fi
   # The package Lake was cloning or checking out when git failed, and the
@@ -33,10 +35,11 @@ for attempt in $(seq 1 15); do
   if [ -z "$name" ]; then echo "$out"; exit 1; fi
   read -r url rev < <(python3 -c "import json,sys; m=json.load(open('lake-manifest.json')); p=next(p for p in m['packages'] if p['name']==sys.argv[1]); print(p['url'], p['rev'])" "$name")
   dir=".lake/packages/$name"
-  if [ ! -d "$dir/.git" ]; then
-    # Lake's own clone failed and Lake hides git's error. Clone directly
-    # (clearing any half-finished directory first) so the real error shows.
-    echo "lake could not clone $name; cloning $url directly"
+  if ! git -C "$dir" rev-parse -q --verify HEAD >/dev/null 2>&1; then
+    # Missing, or a half-finished clone (e.g. left by a git that failed
+    # mid-clone) that Lake can't check out. Lake hides git's error, so clone
+    # directly, clearing the directory first, so any real error shows.
+    echo "no usable clone of $name; cloning $url directly"
     rm -rf "$dir"
     if ! git clone "$url" "$dir"; then
       echo "git clone of $url failed (see git's message above): check network/proxy" \
