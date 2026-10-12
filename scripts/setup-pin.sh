@@ -30,9 +30,20 @@ for attempt in $(seq 1 15); do
   # revision the manifest pins it to.
   name=$(echo "$out" | grep -oE "info: [A-Za-z0-9_-]+: (cloning|updating repository)" | tail -1 \
          | sed -E 's/info: ([A-Za-z0-9_-]+):.*/\1/')
-  rev=$(python3 -c "import json,sys; m=json.load(open('lake-manifest.json')); print(next(p['rev'] for p in m['packages'] if p['name']==sys.argv[1]))" "$name")
+  if [ -z "$name" ]; then echo "$out"; exit 1; fi
+  read -r url rev < <(python3 -c "import json,sys; m=json.load(open('lake-manifest.json')); p=next(p for p in m['packages'] if p['name']==sys.argv[1]); print(p['url'], p['rev'])" "$name")
   dir=".lake/packages/$name"
-  if [ -z "$name" ] || [ -z "$rev" ] || [ ! -d "$dir" ]; then echo "$out"; exit 1; fi
+  if [ ! -d "$dir/.git" ]; then
+    # Lake's own clone failed and Lake hides git's error. Clone directly
+    # (clearing any half-finished directory first) so the real error shows.
+    echo "lake could not clone $name; cloning $url directly"
+    rm -rf "$dir"
+    if ! git clone "$url" "$dir"; then
+      echo "git clone of $url failed (see git's message above): check network/proxy" \
+           "settings for git (e.g. https_proxy) and free disk space/quota." >&2
+      exit 1
+    fi
+  fi
   echo "fetching orphaned revision $rev of $name"
   git -C "$dir" fetch -q origin "$rev"
   git -C "$dir" checkout -q "$rev"
