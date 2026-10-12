@@ -1,8 +1,9 @@
 # Grading contract
 
 This is the authoritative spec for how a submission is scored. Current
-`grading_version`: **2** (`grading.GRADING_VERSION`; v2 = the decl-specific,
-last-message axiom parse below). The code in
+`grading_version`: **3** (`grading.GRADING_VERSION`). v2: the
+decl-specific, last-message axiom parse below. v3: the statement diff also
+ignores `import Aesop` and `set_option maxHeartbeats N` lines; see L0). The code in
 `src/physproofbench/lean/` implements it; if code and doc disagree, this doc
 wins and the code has a bug. Bumping `grading_version` (in `runs/<id>/`
 metadata) is required whenever this contract changes in a way that could move
@@ -23,8 +24,11 @@ Reject the submission before compiling if it contains, as raw text:
   disables a check — at minimum `debug.skipKernelTC`
 - (`proof` mode only) any edit to the statement region: the submission is
   diffed against the item file up to its `:= by` marker. The diff ignores
-  comments (including docstrings), whitespace, and extra `import Mathlib[.…]`
-  lines (which only add declarations and are added by nearly every model),
+  comments (including docstrings), whitespace, extra `import Mathlib[.…]` /
+  `import Aesop` lines (which only add declarations and are added by nearly
+  every model), and `set_option maxHeartbeats N` (alone or as `… in`), which
+  only changes the elaboration budget while the wall-clock timeout still
+  applies. Specialist provers' training header has both,
   but nothing else: any other added `import`, an added `open`, or a `def`
   before the theorem still counts as an edit, since it could change what the
   statement means. (Models routinely drop or

@@ -39,3 +39,8 @@ def test_unterminated_last_fence_wins_over_earlier_closed_block():
     result = extract_lean(completion)
     assert result.lean == "new\n"
     assert result.unterminated_fence
+
+
+def test_lean4_fence_from_specialist_provers():
+    out = extract_lean("Plan...\n```lean4\ntheorem t : True := trivial\n```\n")
+    assert out.lean == "theorem t : True := trivial\n" and not out.used_fallback

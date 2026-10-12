@@ -23,6 +23,7 @@ from physproofbench.repair import (
     repair_run,
 )
 from physproofbench.report import summarize
+from physproofbench.grading import GRADING_VERSION
 
 REPO = Path(__file__).parent.parent
 ITEMS, LEAN = REPO / "items", REPO / "lean"
@@ -89,9 +90,9 @@ class Continuation:
 def grader(**kw):
     text = Path(kw["submission_path"]).read_text()
     if "fixed" in text:
-        return SimpleNamespace(to_dict=lambda: {"verdict": "pass", "grading_version": "2"})
+        return SimpleNamespace(to_dict=lambda: {"verdict": "pass", "grading_version": GRADING_VERSION})
     return SimpleNamespace(to_dict=lambda: {
-        "verdict": "compile_fail", "grading_version": "2", "compiler_output": LEAN_OUTPUT})
+        "verdict": "compile_fail", "grading_version": GRADING_VERSION, "compiler_output": LEAN_OUTPUT})
 
 
 def _graded_source(tmp_path, samples=1):

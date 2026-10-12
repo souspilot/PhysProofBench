@@ -121,3 +121,14 @@ def test_marker_inside_a_comment_is_ignored():
     gold = "-- proof goes after := by\ntheorem t : True := by\n  sorry\n"
     sub = "theorem t : True := by\n  trivial\n"
     assert check_gates(sub, mode="proof", gold_text=gold).passed
+
+
+def test_specialist_prover_header_is_not_a_statement_edit():
+    gold = "import Mathlib.Data.Real.Basic\n\ntheorem t (x : ℝ) : x = x := by\n  sorry\n"
+    sub = ("import Mathlib\nimport Aesop\n\nset_option maxHeartbeats 400000\n\n"
+           "theorem t (x : ℝ) : x = x := by\n  rfl\n")
+    assert check_gates(sub, mode="proof", gold_text=gold).passed
+    inline = "import Mathlib\nset_option maxHeartbeats 0 in\ntheorem t (x : ℝ) : x = x := by\n  rfl\n"
+    assert check_gates(inline, mode="proof", gold_text=gold).passed
+    opened = "import Mathlib\nopen Real\ntheorem t (x : ℝ) : x = x := by\n  rfl\n"
+    assert not check_gates(opened, mode="proof", gold_text=gold).passed  # `open` still counts

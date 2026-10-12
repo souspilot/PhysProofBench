@@ -14,7 +14,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-_OPEN_FENCE = re.compile(r"```lean[ \t]*\r?\n")
+# ```lean and ```lean4 (the tag specialist provers such as Goedel-Prover-V2 and
+# Pythagoras-Prover are trained to emit), any capitalization.
+_OPEN_FENCE = re.compile(r"```[Ll]ean4?[ \t]*\r?\n")
 
 
 @dataclass

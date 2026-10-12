@@ -78,17 +78,24 @@ def strip_lean_comments(text: str) -> str:
     return "".join(out)
 
 
-# Extra `import Mathlib` / `import Mathlib.Foo.Bar` lines only add
+# Extra `import Mathlib` / `import Mathlib.Foo.Bar` (and `import Aesop`, a
+# Mathlib dependency) lines only add
 # declarations to the environment; they cannot redefine or shadow anything the
 # gold statement depends on, and models add them routinely (the prompt says
 # "using Mathlib"). Any other added import still counts as an edit.
-_MATHLIB_IMPORT = re.compile(r"(?<![\w.])import Mathlib(?:\.[\w.]+)*(?![\w.])")
+_MATHLIB_IMPORT = re.compile(r"(?<![\w.])import (?:Mathlib|Aesop)(?:\.[\w.]+)*(?![\w.])")
+# `set_option maxHeartbeats N` (alone, or as `... in` before the theorem) only
+# changes the elaboration budget, never the statement; the wall-clock
+# compile timeout still bounds it. Specialist provers' training header
+# includes `set_option maxHeartbeats 400000` / `0`.
+_MAX_HEARTBEATS_LINE = re.compile(r"(?<![\w.])set_option maxHeartbeats \d+(?:\s+in)?(?![\w.])")
 
 
 def _canonical(text: str) -> str:
     """Comment-, whitespace- and Mathlib-import-insensitive form, for
     comparing statements."""
     stripped = _MATHLIB_IMPORT.sub(" ", strip_lean_comments(text))
+    stripped = _MAX_HEARTBEATS_LINE.sub(" ", stripped)
     return " ".join(stripped.split())
 
 
