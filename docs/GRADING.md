@@ -1,9 +1,10 @@
 # Grading contract
 
 This is the authoritative spec for how a submission is scored. Current
-`grading_version`: **3** (`grading.GRADING_VERSION`). v2: the
+`grading_version`: **4** (`grading.GRADING_VERSION`). v2: the
 decl-specific, last-message axiom parse below. v3: the statement diff also
-ignores `import Aesop` and `set_option maxHeartbeats N` lines; see L0). The code in
+ignores `import Aesop` and `set_option maxHeartbeats N` lines. v4: the item's
+own setup lines are restored before grading; see L0. The code in
 `src/physproofbench/lean/` implements it; if code and doc disagree, this doc
 wins and the code has a bug. Bumping `grading_version` (in `runs/<id>/`
 metadata) is required whenever this contract changes in a way that could move
@@ -13,6 +14,19 @@ Grading is layered. L0–L2 are deterministic and apply to both `proof` and
 `autoform` modes. L3–L4 apply to `autoform` mode only.
 
 ## L0. Syntactic gates (`gates.py`)
+
+**Item setup lines are the benchmark's, not the model's (v4).** Before any
+check, in `proof` mode, the grader restores the item's own `import` and
+`open` lines (e.g. `import PhysProofBench.Core.Probability`,
+`open PhysProofBench`) if the submission dropped them
+(`gates.restore_item_preamble`). Specialist provers always emit their fixed
+training header and drop everything else above the theorem. Without
+restoration their files can't compile, and the gate reports an edit although
+the theorem is unchanged; in the Pythagoras-Prover pilot that explained 13
+of 14 items' statement_edited failures. Only *missing* item lines are added.
+Anything a submission adds before the theorem (other imports, `open`s,
+definitions) still counts as an edit. `grade.json` records
+`preamble_restored`.
 
 Reject the submission before compiling if it contains, as raw text:
 

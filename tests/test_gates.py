@@ -1,4 +1,4 @@
-from physproofbench.lean.gates import check_gates
+from physproofbench.lean.gates import check_gates, restore_item_preamble
 
 GOLD = "theorem foo (a b : Nat) : a + b = b + a := by"
 
@@ -132,3 +132,52 @@ def test_specialist_prover_header_is_not_a_statement_edit():
     assert check_gates(inline, mode="proof", gold_text=gold).passed
     opened = "import Mathlib\nopen Real\ntheorem t (x : ℝ) : x = x := by\n  rfl\n"
     assert not check_gates(opened, mode="proof", gold_text=gold).passed  # `open` still counts
+
+
+ITEM_GOLD = """import PhysProofBench.Core.Probability
+
+-- PHYSPROOFBENCH-ITEM: X
+-- PHYSPROOFBENCH-DECL: thm
+
+open PhysProofBench
+
+/-- doc -/
+theorem thm (μ : Fin 2 → ℝ) (h : IsProbDist μ) : 0 ≤ μ 0 := by
+  sorry
+"""
+
+PROVER_STYLE = """import Mathlib
+import Aesop
+
+set_option maxHeartbeats 400000
+
+theorem thm (μ : Fin 2 → ℝ) (h : IsProbDist μ) : 0 ≤ μ 0 := by
+  exact h.1 0
+"""
+
+
+def test_restore_item_preamble_for_prover_header():
+    restored, changed = restore_item_preamble(PROVER_STYLE, ITEM_GOLD)
+    assert changed
+    assert restored.startswith("import PhysProofBench.Core.Probability\nimport Mathlib\nimport Aesop\n")
+    assert "open PhysProofBench" in restored and "exact h.1 0" in restored
+    assert check_gates(restored, mode="proof", gold_text=ITEM_GOLD).passed
+    # Without restoration the gate rejects it.
+    assert not check_gates(PROVER_STYLE, mode="proof", gold_text=ITEM_GOLD).passed
+
+
+def test_restore_is_a_no_op_for_complete_submissions():
+    complete = ITEM_GOLD.replace("  sorry", "  exact h.1 0")
+    assert restore_item_preamble(complete, ITEM_GOLD) == (complete, False)
+
+
+def test_restore_does_not_hide_real_edits():
+    extra_open = PROVER_STYLE.replace("set_option", "open Real\nset_option")
+    restored, _ = restore_item_preamble(extra_open, ITEM_GOLD)
+    assert not check_gates(restored, mode="proof", gold_text=ITEM_GOLD).passed
+    weaker = PROVER_STYLE.replace("0 ≤ μ 0", "0 ≤ μ 0 ∨ True")
+    restored, _ = restore_item_preamble(weaker, ITEM_GOLD)
+    assert not check_gates(restored, mode="proof", gold_text=ITEM_GOLD).passed
+    foreign = PROVER_STYLE.replace("import Aesop", "import Foo")
+    restored, _ = restore_item_preamble(foreign, ITEM_GOLD)
+    assert not check_gates(restored, mode="proof", gold_text=ITEM_GOLD).passed
