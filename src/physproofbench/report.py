@@ -58,6 +58,7 @@ def collect_records(run_dir: Path) -> list[dict]:
             "gate_failures": [],
             "compile_timed_out": None,
             "statement_edited_would_pass": False,
+            "preamble_restored": False,
             "forced_answer": bool((completion or {}).get("forced_answer")),
             "extended": bool((completion or {}).get("extended")),
             "repair_round": (completion or {}).get("repair_round"),
@@ -72,6 +73,7 @@ def collect_records(run_dir: Path) -> list[dict]:
             rec["compile_timed_out"] = grade.get("compile_timed_out")
             diag = grade.get("statement_edit_diagnostic") or {}
             rec["statement_edited_would_pass"] = bool(diag.get("would_pass"))
+            rec["preamble_restored"] = bool(grade.get("preamble_restored"))
         if rec["repair_round"] is not None:
             from .repair import attempt_history
 
@@ -101,6 +103,9 @@ def _group_stats(recs: list[dict], ks: list[int]) -> dict:
         # Rejected by the L0 text gate as statement_edited, yet compiling,
         # axiom-clean and proving the gold type (grading.py diagnostic).
         "statement_edited_would_pass": sum(r["statement_edited_would_pass"] for r in graded),
+        # Submissions that dropped the item's own imports/opens, which the
+        # grader put back (grading v4, gates.restore_item_preamble).
+        "preamble_restored": sum(r["preamble_restored"] for r in graded),
         "median_completion_tokens": statistics.median(tokens) if tokens else None,
         "max_completion_tokens": max(tokens) if tokens else None,
     }
@@ -278,6 +283,7 @@ def render_markdown(summary: dict) -> str:
         f"{t['passed']} passed). Truncated at token limit: {t['truncated']}. "
         f"No ```lean fence: {t['no_lean_fence']}. Compile timeouts: {t['compile_timeouts']}. "
         f"Rejected as statement_edited but otherwise correct: {t['statement_edited_would_pass']}. "
+        f"Item imports/opens restored by the grader: {t['preamble_restored']}. "
         f"Answers forced after the thinking budget (`force-answer`): {t['forced_answers']} "
         f"({t['forced_passed']} passed).",
         "",

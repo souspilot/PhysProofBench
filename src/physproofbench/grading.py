@@ -21,7 +21,7 @@ from .lean.audit import (
     build_axiom_check_source,
     build_same_file_gold_check,
 )
-from .lean.gates import GateResult, check_gates
+from .lean.gates import GateResult, check_gates, restore_item_preamble
 from .lean.sandbox import DEFAULT_MEMORY_CAP_BYTES, CompileResult, compile_file
 
 Verdict = Literal["pass", "gate_fail", "compile_fail", "audit_fail"]
@@ -29,7 +29,7 @@ Verdict = Literal["pass", "gate_fail", "compile_fail", "audit_fail"]
 # Bump whenever a change to grading could change a verdict (docs/GRADING.md).
 # The batch runner re-grades stored samples whose grade was produced under a
 # different version.
-GRADING_VERSION = "3"
+GRADING_VERSION = "4"
 
 # Compiler output kept in grade records; full logs of failing compiles can be
 # megabytes of elaboration traces, and the first errors are what matters.
@@ -45,6 +45,9 @@ class GradeReport:
     # Set only for gate_fail == [statement_edited] with diagnosis on; see
     # `_diagnose_statement_edit`. Never changes the verdict.
     statement_edit_diagnostic: dict | None = None
+    # The item's own imports/opens were missing and put back before grading
+    # (gates.restore_item_preamble).
+    preamble_restored: bool = False
 
     def to_dict(self) -> dict:
         """JSON-serializable record, as stored in `grade.json`."""
@@ -63,6 +66,7 @@ class GradeReport:
             "axioms": self.axiom_audit.axioms if self.axiom_audit else None,
             "audit_failures": self.axiom_audit.failures if self.axiom_audit else [],
             "statement_edit_diagnostic": self.statement_edit_diagnostic,
+            "preamble_restored": self.preamble_restored,
         }
 
 
@@ -88,10 +92,13 @@ def grade_submission(
     """
     submission_text = submission_path.read_text(encoding="utf-8")
     gold_text = gold_path.read_text(encoding="utf-8") if gold_path else None
+    restored = False
+    if mode == "proof" and gold_text is not None:
+        submission_text, restored = restore_item_preamble(submission_text, gold_text)
 
     gate = check_gates(submission_text, mode=mode, gold_text=gold_text)
     if not gate.passed:
-        report = GradeReport(verdict="gate_fail", gate=gate)
+        report = GradeReport(verdict="gate_fail", gate=gate, preamble_restored=restored)
         if (
             diagnose_statement_edits
             and gold_text is not None
@@ -111,18 +118,21 @@ def grade_submission(
     )
 
     if not compile_result.ok:
-        return GradeReport(verdict="compile_fail", gate=gate, compile=compile_result)
+        return GradeReport(verdict="compile_fail", gate=gate, compile=compile_result,
+                           preamble_restored=restored)
 
     axiom_audit = audit_axioms(
         compile_result.stdout + "\n" + compile_result.stderr, decl_name
     )
     if not axiom_audit.passed:
         return GradeReport(
-            verdict="audit_fail", gate=gate, compile=compile_result, axiom_audit=axiom_audit
+            verdict="audit_fail", gate=gate, compile=compile_result, axiom_audit=axiom_audit,
+            preamble_restored=restored,
         )
 
     return GradeReport(
-        verdict="pass", gate=gate, compile=compile_result, axiom_audit=axiom_audit
+        verdict="pass", gate=gate, compile=compile_result, axiom_audit=axiom_audit,
+        preamble_restored=restored,
     )
 
 

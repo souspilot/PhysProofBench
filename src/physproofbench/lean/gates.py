@@ -108,6 +108,58 @@ def _statement_prefix(text: str) -> str | None:
     return canon[:idx].strip()
 
 
+_IMPORT_LINE = re.compile(r"^\s*import\s+\S+\s*$")
+_OPEN_LINE = re.compile(r"^\s*open\s+\S.*$")
+_DECL_START = ("/--", "theorem ", "lemma ")
+
+
+def _head(lines: list[str]) -> list[str]:
+    """Lines before the item's docstring/declaration."""
+    out = []
+    for line in lines:
+        if line.lstrip().startswith(_DECL_START):
+            break
+        out.append(line)
+    return out
+
+
+def restore_item_preamble(submission_text: str, gold_text: str) -> tuple[str, bool]:
+    """Put the item's own setup lines -- its `import`s and `open`s, which
+    the benchmark fixes and which are not part of what a model is asked to
+    prove -- in front of the submission if it dropped any.
+
+    Specialist provers always emit their fixed training header
+    (`import Mathlib`, `import Aesop`, `set_option maxHeartbeats ...`) and
+    drop everything else above the theorem, including
+    `import PhysProofBench.Core.X` / `open PhysProofBench`. Without them the
+    item's definitions don't exist, so the file can't compile, and the
+    statement gate reports an edit although the theorem is unchanged.
+
+    Only lines missing from the submission are added: the item's imports
+    first (the submission's own imports follow), then its missing `open`s.
+    Nothing else changes, so anything a submission *adds* before the theorem
+    (other imports, `open`s, definitions) is still caught by the gate.
+    Returns (text, whether anything was restored).
+    """
+    gold_head = _head(gold_text.splitlines())
+    gold_imports = [l.strip() for l in gold_head if _IMPORT_LINE.match(l)]
+    gold_opens = [l.strip() for l in gold_head if _OPEN_LINE.match(l)]
+    lines = submission_text.splitlines()
+    sub_imports = [l.strip() for l in lines if _IMPORT_LINE.match(l)]
+    body = [l for l in lines if not _IMPORT_LINE.match(l)]
+    sub_opens = {l.strip() for l in _head(body) if _OPEN_LINE.match(l)}
+    missing_imports = [i for i in gold_imports if i not in sub_imports]
+    missing_opens = [o for o in gold_opens if o not in sub_opens]
+    if not missing_imports and not missing_opens:
+        return submission_text, False
+    imports = gold_imports + [i for i in sub_imports if i not in gold_imports]
+    parts = ["\n".join(imports), ""]
+    if missing_opens:
+        parts += ["\n".join(missing_opens), ""]
+    parts.append("\n".join(body).strip("\n"))
+    return "\n".join(parts) + "\n", True
+
+
 def check_gates(
     submission_text: str,
     *,
