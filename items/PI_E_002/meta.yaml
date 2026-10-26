@@ -1,0 +1,34 @@
+id: PI_E_002
+status: draft
+role: benchmark
+category: E
+lean_file: lean/PhysProofBench/Items/PI_E_002.lean
+decl_name: PI_E_002
+modes:
+- proof
+core_deps: []
+reviewed_by: []
+metadata:
+  set: physics_intuition
+  review_status: ai_reviewed
+  contributed_by: harshitbiitk@gmail.com
+  shape: answer_blank
+  source:
+    collection: USAPhO
+    year: 2024
+    item_label: Question A2, part c (i-iii)
+    url: https://www.aapt.org/physicsteam/upload/2024-USAPhO-Exam_solutions.pdf
+    solution_by: AAPT USAPhO committee (official solution)
+  topic:
+  - astrophysics
+  - degenerate-matter
+  - dimensional-analysis
+  small_parameter: none (scaling)
+  regime: non-relativistic electron degeneracy; roughly uniform density
+  intuition_move: Get the hydrostatic central pressure P ~ G M^2 / R^4 by dimensional analysis alone,
+    balance it against degeneracy pressure ∝ ρ^(5/3), and read off R ∝ M^(-1/3).
+  plug_in_trap: Expecting ordinary-matter intuition (bigger mass, bigger radius, e.g. R ∝ M^(1/3) at fixed
+    density).
+  contamination_risk: medium
+  expected_answer:
+    n: -1/3

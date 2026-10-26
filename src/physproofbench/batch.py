@@ -233,9 +233,9 @@ def build_plan(
         for cond in conditions:
             nl_proof = None
             if cond == "with_nl_proof":
-                if meta.nl.proof is None:
+                if not meta.has_nl_proof:
                     plan.skipped.append(
-                        (item_id, cond, "source gives no proof (nl.proof absent)"))
+                        (item_id, cond, "no NL proof (nl.md has no `## proof`)"))
                     continue
                 nl_proof = _extract_nl_section(
                     (item_dir / "nl.md").read_text(encoding="utf-8"), "proof"

@@ -132,14 +132,14 @@ def summarize(run_dir: Path, items_dir: Path) -> dict:
     for item_id in {r["item_id"] for r in all_records}:
         meta_path = items_dir / item_id / "meta.yaml"
         meta = load_item_meta(meta_path) if meta_path.exists() else None
-        kinds[item_id] = meta.proof_kind if meta else "?"
+        kinds[item_id] = meta.category if meta else "?"
         roles[item_id] = meta.role if meta else "benchmark"
     # Canaries are pipeline checks: kept out of every benchmark number.
     records = [r for r in all_records if roles[r["item_id"]] != "canary"]
     canary_records = [r for r in all_records if roles[r["item_id"]] == "canary"]
 
     per_cell = {
-        f"{item}|{cond}": {"item_id": item, "condition": cond, "proof_kind": kinds[item],
+        f"{item}|{cond}": {"item_id": item, "condition": cond, "category": kinds[item],
                            **_group_stats(recs, ks)}
         for (item, cond), recs in sorted(_by(records, ("item_id", "condition")).items())
     }
@@ -148,7 +148,7 @@ def summarize(run_dir: Path, items_dir: Path) -> dict:
     aggregates = {}
     for label, keyfn in (
         ("condition", lambda s: s["condition"]),
-        ("proof_kind x condition", lambda s: f"{s['proof_kind']} | {s['condition']}"),
+        ("category x condition", lambda s: f"{s['category']} | {s['condition']}"),
     ):
         groups: dict[str, list[dict]] = defaultdict(list)
         for cell in per_cell.values():
@@ -301,14 +301,14 @@ def render_markdown(summary: dict) -> str:
     lines += [
         "## Per item",
         "",
-        "| item | kind | condition | n | pass | " + " | ".join(f"pass@{k}" for k in ks)
+        "| item | category | condition | n | pass | " + " | ".join(f"pass@{k}" for k in ks)
         + " | " + " | ".join(VERDICTS[1:]) + " | of which timeouts | edited-but-correct | truncated | median tokens |",
         "|---|---|---|---|---|" + "---|" * len(ks) + "---|" * (len(VERDICTS) - 1) + "---|---|---|---|",
     ]
     for cell in summary["per_item_condition"].values():
         v = cell["verdicts"]
         lines.append(
-            f"| {cell['item_id']} | {cell['proof_kind']} | {cell['condition']} | "
+            f"| {cell['item_id']} | {cell['category']} | {cell['condition']} | "
             f"{cell['graded']} | {cell['passed']} | "
             + " | ".join(_fmt(cell[f"pass@{k}"]) for k in ks) + " | "
             + " | ".join(str(v.get(x, 0)) for x in VERDICTS[1:])

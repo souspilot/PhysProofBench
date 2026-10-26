@@ -7,5 +7,5 @@ problem, not a gap in physics knowledge.
 
 ## Reference proof
 
-`tests/fixtures/canary_proofs/CAN_00_006_001.lean` (public: canaries are not benchmark
+`tests/fixtures/reference_proofs/CAN_00_006_001.lean` (public: canaries are not benchmark
 items). Graded `pass` on both pins (`lean`, `lean-v4.9`), 2026-10-12.

@@ -1,0 +1,35 @@
+id: PI_A_002
+status: draft
+role: benchmark
+category: A
+lean_file: lean/PhysProofBench/Items/PI_A_002.lean
+decl_name: PI_A_002
+modes:
+- proof
+core_deps: []
+reviewed_by: []
+metadata:
+  set: physics_intuition
+  review_status: ai_reviewed
+  contributed_by: harshitbiitk@gmail.com
+  shape: answer_blank
+  source:
+    collection: USAPhO
+    year: 2024
+    item_label: Question B2, part a (i-iii)
+    url: https://www.aapt.org/physicsteam/upload/2024-USAPhO-Exam_solutions.pdf
+    solution_by: AAPT USAPhO committee (official solution)
+  topic:
+  - statistical-mechanics
+  - quantum
+  - solids
+  small_parameter: α = ħω / (k_B T)
+  regime: k_B T >> ħω (high temperature)
+  intuition_move: Recover Dulong–Petit as the classical limit and find the first quantum correction, which
+    needs the quanta number m to second order because of its 1/α prefactor.
+  plug_in_trap: Expanding m only to first order (m ≈ 3N(1/α - 1/2)) gives C_V = 3Nk_B exactly, missing
+    the correction; quoting Dulong–Petit gives no correction at all.
+  contamination_risk: medium
+  expected_answer:
+    b: -1/12
+    n: 2

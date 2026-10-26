@@ -1,0 +1,35 @@
+id: PI_E_001
+status: draft
+role: benchmark
+category: E
+lean_file: lean/PhysProofBench/Items/PI_E_001.lean
+decl_name: PI_E_001
+modes:
+- proof
+core_deps: []
+reviewed_by: []
+metadata:
+  set: physics_intuition
+  review_status: ai_reviewed
+  contributed_by: harshitbiitk@gmail.com
+  shape: answer_blank
+  source:
+    collection: USAPhO
+    year: 2025
+    item_label: Problem A2, part g
+    url: https://www.aapt.org/physicsteam/upload/2025-USAPhO-Exam_solutions.pdf
+    solution_by: AAPT USAPhO committee (official solution)
+    literature: Rees 1988; Phinney 1989; Lodato, King & Pringle 2009 (canonical t^-5/3 fallback)
+  topic:
+  - astrophysics
+  - gravitation
+  - kepler
+  small_parameter: none (pure scaling)
+  regime: late times after the first return; energies uniformly distributed
+  intuition_move: Map energy to return time with Kepler's third law (E ∝ T^(-2/3)); a flat energy distribution
+    then gives dM/dt ∝ |dE/dT| ∝ t^(-5/3).
+  plug_in_trap: Assuming the luminosity tracks the period distribution directly (∝ t^(-2/3)), or using
+    the semi-major axis instead of energy as the uniformly distributed variable.
+  contamination_risk: low
+  expected_answer:
+    n: 5/3

@@ -39,7 +39,7 @@ class RunResult:
 
 def _extract_nl_section(nl_md_text: str, anchor: str) -> str:
     """Pull the `## statement` or `## proof` section out of an nl.md file
-    (the `nl.statement`/`nl.proof` anchors from meta.yaml, plan.md §4)."""
+    (docs/SCHEMA.md)."""
     pattern = re.compile(
         rf"^## {re.escape(anchor)}\s*\n(.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL
     )

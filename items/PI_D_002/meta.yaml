@@ -1,0 +1,36 @@
+id: PI_D_002
+status: draft
+role: benchmark
+category: D
+lean_file: lean/PhysProofBench/Items/PI_D_002.lean
+decl_name: PI_D_002
+modes:
+- proof
+core_deps: []
+reviewed_by: []
+metadata:
+  set: physics_intuition
+  review_status: ai_reviewed
+  contributed_by: harshitbiitk@gmail.com
+  shape: answer_blank
+  source:
+    collection: USAPhO
+    year: 2023
+    item_label: Question A2, part b (i-iii)
+    url: https://www.aapt.org/physicsteam/upload/2023-USAPhO-solutions.pdf
+    solution_by: AAPT USAPhO committee (official solution)
+  topic:
+  - electrostatics
+  - orbits
+  - symmetry-breaking
+  small_parameter: δ / r₀  (orbit radius offset from the ring of minima)
+  regime: δ << r₀ << R
+  intuition_move: With a ring of minima ('flat circle'), circular orbits near the ring are held only by
+    the radial restoring force ∝ δ, so the orbital frequency goes to zero like √δ (a Goldstone-type soft
+    mode).
+  plug_in_trap: Reusing the harmonic result (Ω_c = ω_c) or the radial oscillation frequency (√3 ω_c) for
+    circular motion.
+  contamination_risk: medium
+  expected_answer:
+    c: sqrt(3)
+    p: 1/2

@@ -87,7 +87,7 @@ def test_plan_skips_with_nl_proof_when_source_has_no_proof(monkeypatch):
     def without_proof(path):  # simulate an item whose source gives no proof
         meta = real(path)
         if meta.id == "SM_01_E06_001":
-            meta.nl.proof = None
+            meta.has_nl_proof = False
         return meta
 
     monkeypatch.setattr(batch_module, "load_item_meta", without_proof)

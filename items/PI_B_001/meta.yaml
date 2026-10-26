@@ -1,0 +1,33 @@
+id: PI_B_001
+status: draft
+role: benchmark
+category: B
+lean_file: lean/PhysProofBench/Items/PI_B_001.lean
+decl_name: PI_B_001
+modes:
+- proof
+core_deps: []
+reviewed_by: []
+metadata:
+  set: physics_intuition
+  review_status: ai_reviewed
+  contributed_by: harshitbiitk@gmail.com
+  shape: bound_given
+  source:
+    collection: USAPhO
+    year: 2023
+    item_label: Question A3, part a (i-iii)
+    url: https://www.aapt.org/physicsteam/upload/2023-USAPhO-solutions.pdf
+    solution_by: AAPT USAPhO committee (official solution)
+  topic:
+  - thermodynamics
+  - heat-engines
+  small_parameter: β / ((1+β) ln α)  (≈ Q_isobaric / Q_isothermal)
+  regime: heat taken in at non-maximal temperature is negligible
+  intuition_move: A reversible cycle reaches Carnot efficiency when essentially all heat enters at the
+    top temperature; identify which heat ratio must vanish.
+  plug_in_trap: Plugging into η = 1 - T_C/T_H for any reversible cycle gives Carnot unconditionally; the
+    cycle's own heats must be compared.
+  contamination_risk: medium
+  review_flags:
+  - official_solution_condition_not_sharp
