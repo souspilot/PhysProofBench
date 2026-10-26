@@ -1,0 +1,16 @@
+id: PI_T_006
+status: draft
+role: benchmark
+category: T
+lean_file: lean/PhysProofBench/Items/PI_T_006.lean
+decl_name: kinetic_energy_double_speed
+modes:
+- proof
+core_deps: []
+reviewed_by: []
+metadata:
+  set: physics_intuition
+  tier: trivial
+  purpose: 'environment check: a definition before the statement (`unfold`, `ring`)'
+  reference_proof: tests/fixtures/reference_proofs/PI_T_006.lean
+  contributed_by: harshitbiitk@gmail.com

@@ -205,7 +205,8 @@ are frozen in `docs/PROMPTS.md`; changing one bumps `grading_version`.
 ## Reported metrics
 
 Per run, per condition (A1/A2/B1/B2 — see `plan.md` §1), overall and sliced
-by `proof_kind`, `difficulty.band`, chapter, and `imports_physlib`:
+by `category` (`docs/SCHEMA.md`; the v1 slices by `proof_kind`,
+`difficulty.band`, chapter and `imports_physlib` now live in `metadata`):
 
 - pass@1 and pass@k (report k and sampling temperature)
 - gate-failure rate, compile rate, audit-failure rate, broken out

@@ -1,0 +1,16 @@
+id: PI_T_005
+status: draft
+role: benchmark
+category: T
+lean_file: lean/PhysProofBench/Items/PI_T_005.lean
+decl_name: kinetic_energy_pos
+modes:
+- proof
+core_deps: []
+reviewed_by: []
+metadata:
+  set: physics_intuition
+  tier: trivial
+  purpose: 'environment check: positivity side conditions'
+  reference_proof: tests/fixtures/reference_proofs/PI_T_005.lean
+  contributed_by: harshitbiitk@gmail.com

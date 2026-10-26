@@ -1,0 +1,16 @@
+id: PI_T_004
+status: draft
+role: benchmark
+category: T
+lean_file: lean/PhysProofBench/Items/PI_T_004.lean
+decl_name: half_life_count
+modes:
+- proof
+core_deps: []
+reviewed_by: []
+metadata:
+  set: physics_intuition
+  tier: trivial
+  purpose: 'environment check: existential answer (`answer_blank` shape)'
+  reference_proof: tests/fixtures/reference_proofs/PI_T_004.lean
+  contributed_by: harshitbiitk@gmail.com

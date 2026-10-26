@@ -1,0 +1,34 @@
+id: PI_C_002
+status: draft
+role: benchmark
+category: C
+lean_file: lean/PhysProofBench/Items/PI_C_002.lean
+decl_name: PI_C_002
+modes:
+- proof
+core_deps: []
+reviewed_by: []
+metadata:
+  set: physics_intuition
+  review_status: ai_reviewed
+  contributed_by: harshitbiitk@gmail.com
+  shape: answer_blank
+  source:
+    collection: USAPhO
+    year: 2020
+    item_label: Question B3, parts d-f
+    url: https://www.aapt.org/Common/upload/2020_USAPhO_solutions.pdf
+    solution_by: AAPT USAPhO committee (official solution)
+  topic:
+  - thermodynamics
+  - real-gases
+  - free-expansion
+  small_parameter: ε = a N / (V k T)  (attraction energy over thermal energy)
+  regime: dilute, weakly interacting gas
+  intuition_move: The ideal-gas result (no cooling in free expansion) is the reduced model; keep the mean-field
+    attraction to first order and use energy conservation, remembering the pair-counting factor 1/2.
+  plug_in_trap: 'Ideal gas: ΔT = 0. Forgetting the 1/2 for pair double counting doubles the cooling.'
+  contamination_risk: medium
+  expected_answer:
+    c: 1/3
+    dS: N k ln 2 - a N^2 / (2 V T)

@@ -1,0 +1,33 @@
+id: PI_B_002
+status: draft
+role: benchmark
+category: B
+lean_file: lean/PhysProofBench/Items/PI_B_002.lean
+decl_name: PI_B_002_bound
+modes:
+- proof
+core_deps: []
+reviewed_by: []
+metadata:
+  set: physics_intuition
+  review_status: ai_reviewed
+  contributed_by: harshitbiitk@gmail.com
+  shape: bound_given
+  source:
+    collection: USAPhO
+    year: 2025
+    item_label: Problem A3, parts b and d
+    url: https://www.aapt.org/physicsteam/upload/2025-USAPhO-Exam_solutions.pdf
+    solution_by: AAPT USAPhO committee (official solution)
+  topic:
+  - electromagnetism
+  - magnetic-pressure
+  - materials
+  small_parameter: t / a  (wire thickness over inner radius)
+  regime: thin wire, many layers
+  intuition_move: Each layer only has to hold the jump in magnetic pressure across it, so stress constraints
+    add up layer by layer; in the thin-wire limit the sum becomes ln(b/a).
+  plug_in_trap: Treating the whole winding as one coil (single-layer formula with thickness b-a) gives
+    a power law in thickness instead of the logarithm.
+  contamination_risk: low
+  expected_answer: B_max^2 = (π/2) σ μ0 ln(b/a)

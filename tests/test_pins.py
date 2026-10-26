@@ -35,12 +35,13 @@ def test_core_modules_present_on_every_pin(pin):
         assert (pin / "PhysProofBench" / "Core" / core.name).exists(), core.name
 
 
-def test_every_canary_has_a_reference_proof_fixture():
-    """The oracle run (scripts/oracle_server.py) needs one per canary."""
+def test_every_check_item_has_a_reference_proof_fixture():
+    """The oracle run (scripts/oracle_server.py) needs a known proof for every
+    pipeline-check item: canaries and the trivial `T` category."""
     import yaml
 
-    fixtures = REPO / "tests" / "fixtures" / "canary_proofs"
-    for meta_path in (REPO / "items").glob("CAN_*/meta.yaml"):
+    fixtures = REPO / "tests" / "fixtures" / "reference_proofs"
+    for meta_path in (REPO / "items").glob("*/meta.yaml"):
         meta = yaml.safe_load(meta_path.read_text())
-        assert meta["role"] == "canary"
-        assert (fixtures / f"{meta['id']}.lean").exists(), meta["id"]
+        if meta.get("role") == "canary" or meta.get("category") == "T":
+            assert (fixtures / f"{meta['id']}.lean").exists(), meta["id"]

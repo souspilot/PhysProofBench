@@ -1,0 +1,33 @@
+id: PI_D_001
+status: draft
+role: benchmark
+category: D
+lean_file: lean/PhysProofBench/Items/PI_D_001.lean
+decl_name: PI_D_001
+modes:
+- proof
+core_deps: []
+reviewed_by: []
+metadata:
+  set: physics_intuition
+  review_status: ai_reviewed
+  contributed_by: harshitbiitk@gmail.com
+  shape: answer_blank
+  source:
+    collection: USAPhO
+    year: 2024
+    item_label: Question B2, part b (i-ii)
+    url: https://www.aapt.org/physicsteam/upload/2024-USAPhO-Exam_solutions.pdf
+    solution_by: AAPT USAPhO committee (official solution)
+  topic:
+  - thermodynamics
+  - oscillations
+  - heat-capacity
+  small_parameter: piston displacement / h
+  regime: small oscillations; gas and piston in mutual thermal equilibrium, isolated from environment
+  intuition_move: Linearize the pressure force about equilibrium; the effective adiabatic index must include
+    the piston's heat capacity because the piston exchanges heat with the gas but does no P dV work.
+  plug_in_trap: Using the monatomic gas's γ = 5/3 gives ω² = 5g/(3h); the correct effective γ is 11/9.
+  contamination_risk: medium
+  expected_answer:
+    gamma: 11/9

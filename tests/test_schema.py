@@ -1,51 +1,40 @@
 import pytest
 from pydantic import ValidationError
 
-from physproofbench.schema import ItemMeta
+from physproofbench.schema import ItemMeta, load_item_meta
 
 BASE = {
-    "id": "SM_01_009_001",
-    "schema_version": 1,
-    "status": "draft",
-    "source": {
-        "book": "SM",
-        "chapter": 1,
-        "item_label": "Lemma 1.9",
-        "pages": [21],
-    },
-    "topic": ["statistical-mechanics", "entropy"],
-    "proof_kind": "exact",
-    "hidden_assumptions": [],
-    "lean_file": "lean/PhysProofBench/Items/SM_01_009_001.lean",
-    "decl_name": "shannonEntropy_le_log_card",
-    "solution_file": "lean/PhysProofBenchSolutions/SM_01_009_001.lean",
-    "imports_physlib": False,
-    "modes": ["proof"],
-    "nl": {"statement": "nl.md#statement", "proof": "nl.md#proof"},
-    "difficulty": {"decl_count": 4, "band": "small"},
-    "contributed_by": "harshitbiitk@gmail.com",
-    "reviewed_by": [],
+    "id": "PI_D_001",
+    "lean_file": "lean/PhysProofBench/Items/PI_D_001.lean",
+    "decl_name": "PI_D_001",
 }
 
 
-def test_valid_draft_item_parses():
+def test_minimal_item_parses_with_defaults():
     item = ItemMeta.model_validate(BASE)
-    assert item.id == "SM_01_009_001"
+    assert (item.status, item.role, item.category, item.modes) == (
+        "draft", "benchmark", "-", ["proof"])
+    assert item.metadata == {}
 
 
-def test_bad_id_pattern_rejected():
-    data = dict(BASE, id="not-an-id")
+def test_metadata_is_free_form():
+    data = dict(BASE, metadata={"source": {"collection": "USAPhO", "year": 2024},
+                                "anything": [1, 2]})
+    assert ItemMeta.model_validate(data).metadata["source"]["year"] == 2024
+
+
+def test_unknown_top_level_field_rejected():
     with pytest.raises(ValidationError):
-        ItemMeta.model_validate(data)
+        ItemMeta.model_validate(dict(BASE, source={"book": "SM"}))
 
 
-@pytest.mark.parametrize("item_id", ["SM_01_E06_001", "SM_02_Q11_001"])
-def test_exercise_and_equation_ids_accepted(item_id):
+@pytest.mark.parametrize("item_id", ["PI_A_001", "PI_T_003", "SM_01_E06_001", "CAN_00_001_001"])
+def test_ids_accepted(item_id):
     assert ItemMeta.model_validate(dict(BASE, id=item_id)).id == item_id
 
 
-@pytest.mark.parametrize("item_id", ["SM_01_X06_001", "SM_01_E6_001", "SM_01_E006_001"])
-def test_malformed_item_numbers_rejected(item_id):
+@pytest.mark.parametrize("item_id", ["not-an-id", "pi_a_001", "PI__001", "PI_A_001_"])
+def test_bad_ids_rejected(item_id):
     with pytest.raises(ValidationError):
         ItemMeta.model_validate(dict(BASE, id=item_id))
 
@@ -58,29 +47,28 @@ def test_active_requires_two_reviewers():
     ItemMeta.model_validate(data)  # should not raise
 
 
-def test_strengthening_blocks_active():
-    data = dict(
-        BASE,
-        status="active",
-        reviewed_by=["alice", "bob"],
-        proof_kind="hidden_assumption",
-        hidden_assumptions=[
-            {
-                "id": "extra_reg",
-                "kind": "regularity",
-                "lean": "ContDiff ℝ 2 f",
-                "justification": "strengthening",
-                "note": "made the Lean proof easier",
-            }
-        ],
-    )
-    with pytest.raises(ValidationError):
-        ItemMeta.model_validate(data)
+def _write_item(tmp_path, nl_text, item_id="PI_D_001"):
+    d = tmp_path / item_id
+    d.mkdir()
+    (d / "meta.yaml").write_text(
+        f"id: {item_id}\nlean_file: lean/x.lean\ndecl_name: x\n", encoding="utf-8")
+    if nl_text is not None:
+        (d / "nl.md").write_text(nl_text, encoding="utf-8")
+    return d / "meta.yaml"
 
 
-def test_approximation_block_required_when_proof_kind_touches_it():
-    data = dict(BASE, proof_kind="approximation")
-    with pytest.raises(ValidationError):
-        ItemMeta.model_validate(data)
-    data["approximation"] = {"flavor": "controlled", "encoding": "error_bound"}
-    ItemMeta.model_validate(data)  # should not raise
+def test_has_nl_proof_read_from_nl_md(tmp_path):
+    path = _write_item(tmp_path, "# t\n\n## statement\n\nS.\n\n## proof\n\nP.\n")
+    assert load_item_meta(path).has_nl_proof
+
+
+@pytest.mark.parametrize("nl_text", [None, "## statement\n\nS.\n", "## statement\nS.\n## proof\n\n"])
+def test_no_nl_proof(tmp_path, nl_text):
+    assert not load_item_meta(_write_item(tmp_path, nl_text)).has_nl_proof
+
+
+def test_id_must_match_directory(tmp_path):
+    path = _write_item(tmp_path, None, item_id="PI_D_002")
+    path.write_text("id: PI_D_001\nlean_file: x\ndecl_name: x\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_item_meta(path)

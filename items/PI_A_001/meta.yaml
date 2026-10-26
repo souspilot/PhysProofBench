@@ -1,0 +1,34 @@
+id: PI_A_001
+status: draft
+role: benchmark
+category: A
+lean_file: lean/PhysProofBench/Items/PI_A_001.lean
+decl_name: PI_A_001
+modes:
+- proof
+core_deps: []
+reviewed_by: []
+metadata:
+  set: physics_intuition
+  review_status: ai_reviewed
+  contributed_by: harshitbiitk@gmail.com
+  shape: answer_blank
+  source:
+    collection: USAPhO
+    year: 2023
+    item_label: Question B3, part c.i
+    url: https://www.aapt.org/physicsteam/upload/2023-USAPhO-solutions.pdf
+    solution_by: AAPT USAPhO committee (official solution)
+  topic:
+  - electromagnetism
+  - kinematics
+  - astrophysics
+  small_parameter: d / r  (path length over gyroradius)
+  regime: r >> d
+  intuition_move: Arc minus chord vanishes at first order, so expand the sine to third order; the leading
+    excess is d^3 / (24 r^2).
+  plug_in_trap: A first-order (sin x ≈ x) expansion gives ℓ - d = 0, i.e. no detectable delay.
+  contamination_risk: medium
+  expected_answer:
+    C: 1/(24 r^2)
+    n: 3

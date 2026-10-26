@@ -1,0 +1,16 @@
+id: PI_T_003
+status: draft
+role: benchmark
+category: T
+lean_file: lean/PhysProofBench/Items/PI_T_003.lean
+decl_name: ohm_current
+modes:
+- proof
+core_deps: []
+reviewed_by: []
+metadata:
+  set: physics_intuition
+  tier: trivial
+  purpose: 'environment check: division by a nonzero quantity'
+  reference_proof: tests/fixtures/reference_proofs/PI_T_003.lean
+  contributed_by: harshitbiitk@gmail.com

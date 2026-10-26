@@ -18,7 +18,8 @@ Full design spec: `plan.md`. Living docs as the project develops:
 `docs/SOURCE.md` (which book, coverage ledger), `docs/TAXONOMY.md`
 (`proof_kind`, drift labels, difficulty bands), `docs/GRADING.md` (the exact
 grading contract), `docs/PROMPTS.md` (frozen, versioned prompt templates),
-`docs/DECISIONS.md` (answers to the plan's open questions).
+`docs/DECISIONS.md` (answers to the plan's open questions), `docs/SCHEMA.md`
+(item format, v2), `docs/INTUITION_SET.md` (the physics-intuition set).
 
 ## Repository layout
 
@@ -110,7 +111,7 @@ physproofbench grade-run --run-dir runs/oracle-lean
 
 For the old pin, repeat with `--lean-project lean-v4.9` and another
 `--run-dir`. The canary reference proofs are public, in
-`tests/fixtures/canary_proofs/` (canaries are not benchmark items).
+`tests/fixtures/reference_proofs/` (canaries are not benchmark items).
 
 ## Running a batch (pilot study)
 

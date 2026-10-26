@@ -198,5 +198,5 @@ uninterpretable, because pipeline and model were never separated. Now:
   no custom definitions, separating "can the model write Lean at all in our
   harness" from "can it work with our Core definitions".
 - **Canary reference proofs** moved to the public
-  `tests/fixtures/canary_proofs/` (they are not benchmark items). A test
+  `tests/fixtures/reference_proofs/` (they are not benchmark items). A test
   requires one per canary.

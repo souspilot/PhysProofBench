@@ -16,7 +16,7 @@ a pipeline bug, not a model weakness.
 
 The item is identified by the `-- PHYSPROOFBENCH-ITEM: <id>` tag that every
 gold statement (and so every prompt) contains. Proofs are read from
-`--proofs` (default: tests/fixtures/canary_proofs/<id>.lean). Standard
+`--proofs` (default: tests/fixtures/reference_proofs/<id>.lean). Standard
 library only, so it runs in any Python 3.
 """
 
@@ -35,7 +35,7 @@ def main() -> None:
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--model-name", default="oracle")
     ap.add_argument("--proofs", type=Path,
-                    default=Path(__file__).resolve().parent.parent / "tests/fixtures/canary_proofs")
+                    default=Path(__file__).resolve().parent.parent / "tests/fixtures/reference_proofs")
     args = ap.parse_args()
 
     class Handler(BaseHTTPRequestHandler):
