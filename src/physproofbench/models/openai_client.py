@@ -60,6 +60,7 @@ def complete(
     temperature: float = 0.0,
     max_tokens: int | None = 16384,
     enable_thinking: bool | None = None,
+    reasoning_effort: str | None = None,
     timeout: float | None = 3600.0,
     top_p: float | None = None,
     top_k: int | None = None,
@@ -79,6 +80,8 @@ def complete(
     reasoning phase (sent as `chat_template_kwargs`, a vLLM extension);
     `None` leaves the server/model default alone. `top_k` is likewise a vLLM
     extension (sent in `extra_body`); `top_p` and `seed` are standard.
+    `reasoning_effort` ("low", "medium", "high", ...) is sent as
+    OpenRouter's unified `reasoning: {effort}`; `None` sends nothing.
 
     Pass a shared `client` when calling from many threads (the SDK client is
     thread-safe); otherwise one is built per call with `timeout`."""
@@ -91,6 +94,8 @@ def complete(
     extra_body: dict = {}
     if enable_thinking is not None:
         extra_body["chat_template_kwargs"] = {"enable_thinking": enable_thinking}
+    if reasoning_effort is not None:
+        extra_body["reasoning"] = {"effort": reasoning_effort}
     if top_k is not None:
         extra_body["top_k"] = top_k
     request: dict = {}

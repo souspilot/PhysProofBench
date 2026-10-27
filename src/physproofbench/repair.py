@@ -304,7 +304,8 @@ def repair_run(
         forced = None
         try:
             result = chat_fn("", messages=messages, max_tokens=rcfg.max_tokens,
-                             enable_thinking=config.enable_thinking, seed=seed, **common)
+                             enable_thinking=config.enable_thinking,
+                             reasoning_effort=config.reasoning_effort, seed=seed, **common)
             reasoning, answer = result.reasoning or "", result.text
             if result.finish_reason == "length" and not answer.strip() and reasoning:
                 forced = continue_fn(

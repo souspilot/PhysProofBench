@@ -59,6 +59,15 @@ def test_complete_captures_reasoning_content_and_thinking_flag(monkeypatch):
     assert captured["extra_body"] == {"chat_template_kwargs": {"enable_thinking": False}}
 
 
+def test_complete_sends_openrouter_reasoning_effort(monkeypatch):
+    captured = {}
+    message = SimpleNamespace(content="answer", reasoning="why")
+    monkeypatch.setattr(openai_client, "get_client", lambda *a, **k: _fake_client(message, captured))
+    out = openai_client.complete("hi", model="m", reasoning_effort="high")
+    assert out.reasoning == "why"
+    assert captured["extra_body"] == {"reasoning": {"effort": "high"}}
+
+
 def test_complete_omits_extra_body_by_default(monkeypatch):
     captured = {}
     message = SimpleNamespace(content="answer")

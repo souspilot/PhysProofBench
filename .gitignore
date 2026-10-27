@@ -1,11 +1,14 @@
-# Lean build artifacts
-lean/.lake/
-lean/lakefile.olean
+# Lean build artifacts (both pins and the test fixture project)
+.lake/
+lakefile.olean
+# Grader scratch files, written inside the pin while compiling a candidate
+lean*/tmp*.lean
 
 # Private solutions submodule mount point -- content lives in the separate
 # physproofbench-solutions repo (see docs/DECISIONS.md). Locally this may be
 # populated as a build convenience; it must never be committed here.
 lean/PhysProofBenchSolutions/
+lean-v4.9/PhysProofBenchSolutions/
 
 # Python
 .venv/
@@ -19,14 +22,27 @@ dist/
 # Generated
 runs/*/
 !runs/.gitkeep
+logs/
 
 book/main.txt
 # Solutions appendix (copyrighted): local reference only, never commit.
 book/solutions.pdf
 
+# Secrets and machine-local settings (API keys, cluster paths); never commit.
+.env
+.env.*
+env.sh
+
+# Cluster job output (PBS interactive jobs are named STDIN) and file indexers
+STDIN.[oe][0-9]*
+*.[oe][0-9][0-9][0-9][0-9][0-9]*
+._dbindex_/
+
 # Local harness state (scheduled-wakeup lock etc.), not project content
 .claude/
 
+# Editors and OS
 .DS_Store
-lean-v4.9/.lake/
-lean-v4.9/PhysProofBenchSolutions/
+.vscode/
+.idea/
+*.swp

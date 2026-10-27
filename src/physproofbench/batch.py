@@ -82,6 +82,8 @@ class GenerationConfig:
     top_k: int | None = 20
     max_tokens: int | None = 32768
     enable_thinking: bool | None = None
+    # OpenRouter's `reasoning.effort`; None = the provider's default.
+    reasoning_effort: str | None = None
     core_in_context: bool = True
     seed: int = 0
     mode: str = "proof"
@@ -93,7 +95,7 @@ class GenerationConfig:
 
 # Defaults for GenerationConfig fields added after runs already existed: a
 # stored config without the key means the default, not a settings change.
-_CONFIG_FIELD_DEFAULTS = {"lean_project": "lean"}
+_CONFIG_FIELD_DEFAULTS = {"lean_project": "lean", "reasoning_effort": None}
 
 
 def gold_path(meta: ItemMeta, lean_project_dir: Path) -> Path:
@@ -373,6 +375,7 @@ def generate_run(
                 temperature=config.temperature,
                 max_tokens=config.max_tokens,
                 enable_thinking=config.enable_thinking,
+                reasoning_effort=config.reasoning_effort,
                 timeout=request_timeout,
                 top_p=config.top_p,
                 top_k=config.top_k,
