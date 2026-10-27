@@ -222,6 +222,10 @@ def _generation_options(f):
                      "can still get an answer from a sample that used the whole budget."),
         click.option("--thinking/--no-thinking", "thinking", default=None,
                      help="chat_template_kwargs.enable_thinking. Default: server default."),
+        click.option("--reasoning-effort", default=None,
+                     type=click.Choice(["minimal", "low", "medium", "high", "xhigh"]),
+                     help="OpenRouter's reasoning.effort. Default: provider default "
+                     "(for some models, no reasoning at all)."),
         click.option("--core-in-context/--no-core-in-context", default=True,
                      show_default=True,
                      help="Put the source of the item's PhysProofBench.Core modules in "
@@ -270,8 +274,8 @@ def _parse_max_tokens(value: str) -> int | None:
 
 
 def _build_config_and_plan(model, items, conditions, temperature, top_p, top_k,
-                           max_tokens, thinking, core_in_context, seed, items_dir,
-                           lean_project, samples):
+                           max_tokens, thinking, reasoning_effort, core_in_context, seed,
+                           items_dir, lean_project, samples):
     from .batch import CONDITIONS, GenerationConfig, build_plan, resolve_items
 
     conds = _csv(conditions) or list(CONDITIONS)
@@ -285,6 +289,7 @@ def _build_config_and_plan(model, items, conditions, temperature, top_p, top_k,
         top_k=None if top_k is not None and top_k < 0 else top_k,
         max_tokens=max_tokens if max_tokens and max_tokens > 0 else None,
         enable_thinking=thinking,
+        reasoning_effort=reasoning_effort,
         core_in_context=core_in_context,
         seed=seed,
         lean_project=str(lean_project),
@@ -315,7 +320,8 @@ def _print_plan(plan, samples: int) -> None:
 @click.option("--samples", "-k", type=int, default=4, show_default=True,
               help="Only used to size the plan shown.")
 def preflight(model, items, conditions, temperature, top_p, top_k, max_tokens, answer_reserve,
-              thinking, core_in_context, seed, items_dir, lean_project, samples):
+              thinking, reasoning_effort, core_in_context, seed, items_dir, lean_project,
+              samples):
     """Generation side (GPU node): check the model server before `generate`.
 
     Server reachable, --model served, one test request round-trips, and the
@@ -328,7 +334,7 @@ def preflight(model, items, conditions, temperature, top_p, top_k, max_tokens, a
     requested = _parse_max_tokens(max_tokens)
     config, plan = _build_config_and_plan(
         model, items, conditions, temperature, top_p, top_k, requested, thinking,
-        core_in_context, seed, items_dir, lean_project, samples)
+        reasoning_effort, core_in_context, seed, items_dir, lean_project, samples)
     _print_plan(plan, samples)
     checks, max_len = check_endpoint(model, on_check=lambda c: _echo_checks([c]))
     if max_len is not None or all(c.ok for c in checks):
@@ -364,7 +370,8 @@ def _echo_checks(checks) -> None:
 @click.option("--dry-run", is_flag=True,
               help="Render and save prompts, print the plan, call nothing.")
 def generate(model, items, conditions, temperature, top_p, top_k, max_tokens, answer_reserve,
-             thinking, core_in_context, seed, items_dir, lean_project, run_dir, samples,
+             thinking, reasoning_effort, core_in_context, seed, items_dir, lean_project,
+             run_dir, samples,
              concurrency, request_timeout, max_consecutive_errors, dry_run):
     """Generation side (GPU node): sample completions for many items.
 
@@ -381,7 +388,7 @@ def generate(model, items, conditions, temperature, top_p, top_k, max_tokens, an
     requested = _parse_max_tokens(max_tokens)
     config, plan = _build_config_and_plan(
         model, items, conditions, temperature, top_p, top_k, requested, thinking,
-        core_in_context, seed, items_dir, lean_project, samples)
+        reasoning_effort, core_in_context, seed, items_dir, lean_project, samples)
     _print_plan(plan, samples)
     if dry_run:
         for (item_id, cond), prompt in plan.prompts.items():
