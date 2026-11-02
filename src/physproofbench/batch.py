@@ -44,6 +44,7 @@ from typing import Callable
 
 from .extract import extract_lean
 from .grading import GRADING_VERSION, grade_submission
+from .lean.gates import strip_lean_comments
 from .lean.sandbox import DEFAULT_MEMORY_CAP_BYTES
 from .models.openai_client import (
     Completion,
@@ -91,11 +92,15 @@ class GenerationConfig:
     # Lean project = Mathlib pin ("lean": v4.34; "lean-v4.9": Lean 4.9-era).
     # Prompts, gold statements and grading all come from this project.
     lean_project: str = "lean"
+    # Remove all comments from the statement shown to the model: item comments
+    # can state the expected answer. The statement gate ignores comments.
+    strip_statement_comments: bool = False
 
 
 # Defaults for GenerationConfig fields added after runs already existed: a
 # stored config without the key means the default, not a settings change.
-_CONFIG_FIELD_DEFAULTS = {"lean_project": "lean", "reasoning_effort": None}
+_CONFIG_FIELD_DEFAULTS = {"lean_project": "lean", "reasoning_effort": None,
+                          "strip_statement_comments": False}
 
 
 def gold_path(meta: ItemMeta, lean_project_dir: Path) -> Path:
@@ -229,6 +234,10 @@ def build_plan(
         gold_text = gold_path(meta, lean_project_dir).read_text(encoding="utf-8")
         plan.gold_shas[item_id] = _sha(gold_text)
         gold_prefix = gold_statement_prefix(gold_text)
+        if config.strip_statement_comments:
+            gold_prefix = "\n".join(
+                line.rstrip() for line in strip_lean_comments(gold_prefix).splitlines()
+                if line.strip())
         core_source = None
         if config.core_in_context and meta.core_deps:
             core_source = load_core_source(lean_project_dir, meta.core_deps)

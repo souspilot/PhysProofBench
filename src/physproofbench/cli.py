@@ -231,6 +231,9 @@ def _generation_options(f):
                      help="Put the source of the item's PhysProofBench.Core modules in "
                      "the prompt (docs/PROMPTS.md {core_source}). Without it the model "
                      "never sees what Core definitions mean."),
+        click.option("--strip-statement-comments", is_flag=True,
+                     help="Remove all comments from the statement in the prompt, since "
+                     "item comments can state the expected answer."),
         click.option("--seed", type=int, default=0, show_default=True,
                      help="Base seed; each sample gets a stable derived seed."),
         click.option("--items-dir", type=click.Path(exists=True, path_type=Path),
@@ -275,7 +278,7 @@ def _parse_max_tokens(value: str) -> int | None:
 
 def _build_config_and_plan(model, items, conditions, temperature, top_p, top_k,
                            max_tokens, thinking, reasoning_effort, core_in_context, seed,
-                           items_dir, lean_project, samples):
+                           items_dir, lean_project, samples, strip_statement_comments=False):
     from .batch import CONDITIONS, GenerationConfig, build_plan, resolve_items
 
     conds = _csv(conditions) or list(CONDITIONS)
@@ -293,6 +296,7 @@ def _build_config_and_plan(model, items, conditions, temperature, top_p, top_k,
         core_in_context=core_in_context,
         seed=seed,
         lean_project=str(lean_project),
+        strip_statement_comments=strip_statement_comments,
     )
     plan = build_plan(
         config=config,
@@ -320,8 +324,8 @@ def _print_plan(plan, samples: int) -> None:
 @click.option("--samples", "-k", type=int, default=4, show_default=True,
               help="Only used to size the plan shown.")
 def preflight(model, items, conditions, temperature, top_p, top_k, max_tokens, answer_reserve,
-              thinking, reasoning_effort, core_in_context, seed, items_dir, lean_project,
-              samples):
+              thinking, reasoning_effort, core_in_context, strip_statement_comments, seed,
+              items_dir, lean_project, samples):
     """Generation side (GPU node): check the model server before `generate`.
 
     Server reachable, --model served, one test request round-trips, and the
@@ -334,7 +338,8 @@ def preflight(model, items, conditions, temperature, top_p, top_k, max_tokens, a
     requested = _parse_max_tokens(max_tokens)
     config, plan = _build_config_and_plan(
         model, items, conditions, temperature, top_p, top_k, requested, thinking,
-        reasoning_effort, core_in_context, seed, items_dir, lean_project, samples)
+        reasoning_effort, core_in_context, seed, items_dir, lean_project, samples,
+        strip_statement_comments)
     _print_plan(plan, samples)
     checks, max_len = check_endpoint(model, on_check=lambda c: _echo_checks([c]))
     if max_len is not None or all(c.ok for c in checks):
@@ -370,8 +375,8 @@ def _echo_checks(checks) -> None:
 @click.option("--dry-run", is_flag=True,
               help="Render and save prompts, print the plan, call nothing.")
 def generate(model, items, conditions, temperature, top_p, top_k, max_tokens, answer_reserve,
-             thinking, reasoning_effort, core_in_context, seed, items_dir, lean_project,
-             run_dir, samples,
+             thinking, reasoning_effort, core_in_context, strip_statement_comments, seed,
+             items_dir, lean_project, run_dir, samples,
              concurrency, request_timeout, max_consecutive_errors, dry_run):
     """Generation side (GPU node): sample completions for many items.
 
@@ -388,7 +393,8 @@ def generate(model, items, conditions, temperature, top_p, top_k, max_tokens, an
     requested = _parse_max_tokens(max_tokens)
     config, plan = _build_config_and_plan(
         model, items, conditions, temperature, top_p, top_k, requested, thinking,
-        reasoning_effort, core_in_context, seed, items_dir, lean_project, samples)
+        reasoning_effort, core_in_context, seed, items_dir, lean_project, samples,
+        strip_statement_comments)
     _print_plan(plan, samples)
     if dry_run:
         for (item_id, cond), prompt in plan.prompts.items():
@@ -585,6 +591,52 @@ def repair(source_dir, run_dir, rounds, max_tokens, answer_tokens, concurrency, 
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
     raise SystemExit(1 if stats.aborted else 0)
+
+
+@main.command("physics-only")
+@click.option("--model", required=True)
+@click.option("--run-dir", required=True, type=click.Path(path_type=Path))
+@click.option("--samples", "-k", type=int, default=8, show_default=True)
+@click.option("--items", default="all", show_default=True,
+              help="Comma-separated item ids; 'all' = items with shape answer_blank.")
+@click.option("--max-tokens", type=int, default=32768, show_default=True)
+@click.option("--answer-tokens", type=int, default=8192, show_default=True,
+              help="Forced-answer budget when thinking runs out.")
+@click.option("--thinking/--no-thinking", default=None,
+              help="Chat-template thinking switch. Default: the server's default.")
+@click.option("--reasoning-effort", default=None,
+              type=click.Choice(["minimal", "low", "medium", "high", "xhigh"]))
+@click.option("--temperature", type=float, default=0.6, show_default=True)
+@click.option("--top-p", type=float, default=0.95, show_default=True)
+@click.option("--top-k", type=int, default=20, show_default=True,
+              help="-1 to omit (needed for hosted APIs).")
+@click.option("--force-answer/--no-force-answer", default=True, show_default=True,
+              help="Force an answer when thinking runs out. Needs a vLLM server.")
+@click.option("--concurrency", type=int, default=16, show_default=True)
+@click.option("--seed", type=int, default=0, show_default=True)
+@click.option("--items-dir", type=click.Path(exists=True, path_type=Path),
+              default=Path("items"), show_default=True)
+def physics_only(model, run_dir, samples, items, max_tokens, answer_tokens, thinking,
+                 reasoning_effort, temperature, top_p, top_k, force_answer, concurrency, seed,
+                 items_dir):
+    """Generation side: ask for each result from its plain-language statement.
+
+    No Lean, comments or expert proof, so this measures the physical decision
+    on its own. Answers go to <run-dir>/summary.md for review. Resumable.
+    """
+    from .physics_only import PhysicsConfig, load_items, run_physics_only
+
+    config = PhysicsConfig(
+        model=model, max_tokens=max_tokens, answer_tokens=answer_tokens,
+        enable_thinking=thinking, reasoning_effort=reasoning_effort, temperature=temperature,
+        top_p=top_p, top_k=None if top_k < 0 else top_k, force_answer=force_answer, seed=seed)
+    try:
+        stats = run_physics_only(config=config, items=load_items(items_dir, _csv(items)),
+                                 run_dir=run_dir, samples=samples, concurrency=concurrency,
+                                 log=lambda s: click.echo(s))
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    raise SystemExit(1 if stats["aborted"] else 0)
 
 
 @main.command("budget-curve")
