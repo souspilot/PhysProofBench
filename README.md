@@ -196,6 +196,15 @@ the feedback as worked examples, taken from that run's passing samples on the
 same pin. `--example-items` picks and orders the items. A sample never sees a
 proof of its own item.
 
+**Leak-free prompts.** `generate --strip-statement-comments` removes all
+comments from the statement in the prompt, because item comments can state the
+expected answer. Item files and grading are unchanged.
+
+**Physics-only test.** `physproofbench physics-only --model M --run-dir R -k 8`
+asks for each `answer_blank` item's result from its plain-language statement,
+with no Lean. `R/summary.md` lists the answers beside the expected answer and
+the plug-in trap for review; they are not auto-scored.
+
 **Thinking-budget curves.** `physproofbench budget-curve --from runs/R
 --budgets 4096,8192,16384` evaluates the same traces at several thinking
 budgets, one derived run per budget (`runs/R@think<B>`). Grade each with
