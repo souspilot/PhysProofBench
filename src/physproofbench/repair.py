@@ -102,6 +102,37 @@ class RepairConfig:
     answer_tokens: int = 16384
     feedback_version: str = FEEDBACK_VERSION
     history: str = "latest_attempt_only"
+    # Worked examples: verified proofs of *other* items, from a graded run.
+    examples_from: str | None = None
+    example_items: list[str] | None = None
+    num_examples: int | None = None
+
+    def settings(self) -> dict:
+        """Stored in the run's config; unset fields are left out, so runs made
+        before they existed still resume."""
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+
+def load_examples(source_dir: Path, items: list[str] | None = None) -> dict[str, str]:
+    """{item: its shortest passing candidate} from a graded run, in `items`
+    order (default: sorted by item id)."""
+    best: dict[str, str] = {}
+    for grade_path in (source_dir / "samples").glob("*/*/*/grade.json"):
+        item = grade_path.parts[-4]
+        if items and item not in items:
+            continue
+        candidate = grade_path.parent / "candidate.lean"
+        if (_read_json(grade_path) or {}).get("verdict") != "pass" or not candidate.exists():
+            continue
+        text = candidate.read_text(encoding="utf-8")
+        if item not in best or len(text) < len(best[item]):
+            best[item] = text
+    return {i: best[i] for i in (items or sorted(best)) if i in best}
+
+
+def examples_for(item_id: str, examples: dict[str, str], n: int | None) -> list[str]:
+    """Leave-one-out: never an item's own proof."""
+    return [text for item, text in examples.items() if item != item_id][:n]
 
 
 def compiler_errors(output: str) -> list[tuple[int, int, str]]:
@@ -126,7 +157,7 @@ def _numbered(text: str) -> str:
     return "\n".join(f"{i + 1:>{width}} | {line}" for i, line in enumerate(lines))
 
 
-def build_feedback(grade: dict, candidate: str) -> str:
+def build_feedback(grade: dict, candidate: str, examples: list[str] | None = None) -> str:
     """The user message for a repair round, from the latest attempt's grade."""
     verdict = grade.get("verdict")
     parts = ["Your previous answer was checked against the Lean 4 / Mathlib version "
@@ -161,6 +192,11 @@ def build_feedback(grade: dict, candidate: str) -> str:
     if candidate.strip():
         parts.append("The file that was checked, with line numbers:\n```lean\n"
                      + _numbered(candidate) + "\n```")
+    if examples:
+        parts.append("For reference, these complete proofs of other theorems compile on this "
+                     "exact Lean / Mathlib version. Use them as a guide to syntax, lemma names "
+                     "and proof style:")
+        parts += [f"```lean\n{text.strip()}\n```" for text in examples]
     parts.append("Fix the proof. Reply with a single ```lean fenced code block containing "
                  "the complete corrected file (imports through the closed proof), keeping "
                  "the theorem statement exactly as given. No commentary outside the code "
@@ -182,7 +218,7 @@ def init_repair_run(
     if src_stored is None:
         raise FileNotFoundError(f"{source_dir / 'config.json'} not found")
     config = GenerationConfig(**src_stored["generation"])
-    origin = {"from_run": str(source_dir), **asdict(rcfg)}
+    origin = {"from_run": str(source_dir), **rcfg.settings()}
     stored = _read_json(run_dir / "config.json")
     if stored is not None and stored.get("repair") != origin:
         raise ValueError(f"{run_dir} is a repair run with settings {stored.get('repair')}; "
@@ -267,6 +303,18 @@ def repair_run(
     return."""
     config, tasks = init_repair_run(source_dir=source_dir, run_dir=run_dir, rcfg=rcfg,
                                     items=items, samples=samples)
+    examples: dict[str, str] = {}
+    if rcfg.examples_from:
+        examples_dir = Path(rcfg.examples_from)
+        pin = (_read_json(examples_dir / "config.json") or {}).get("generation", {}).get(
+            "lean_project")
+        if pin != config.lean_project:
+            raise ValueError(f"{examples_dir} was graded on pin {pin!r}, but this run uses "
+                             f"{config.lean_project!r}: its proofs may not compile here.")
+        examples = load_examples(examples_dir, rcfg.example_items)
+        if not examples:
+            raise ValueError(f"no passing proofs to use as examples in {examples_dir}")
+        log(f"[repair] worked examples from {examples_dir}: {', '.join(examples)}")
     stats = RepairStats()
     lock = threading.Lock()
     abort = threading.Event()
@@ -291,7 +339,8 @@ def repair_run(
             return False
         candidate = (d / "candidate.lean").read_text(encoding="utf-8") \
             if (d / "candidate.lean").exists() else ""
-        feedback = build_feedback(grade, candidate)
+        feedback = build_feedback(grade, candidate,
+                                  examples_for(task.item_id, examples, rcfg.num_examples))
         messages = [
             {"role": "user", "content": prompt},
             {"role": "assistant", "content": record.get("text") or "(no answer)"},

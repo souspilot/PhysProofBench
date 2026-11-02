@@ -20,6 +20,8 @@ from physproofbench.repair import (
     RepairConfig,
     build_feedback,
     compiler_errors,
+    examples_for,
+    load_examples,
     repair_run,
 )
 from physproofbench.report import summarize
@@ -175,6 +177,72 @@ def test_repair_forces_an_answer_when_a_round_runs_out(tmp_path):
     record = json.loads((tmp_path / "rep/samples/SM_01_009_001/no_nl_proof/000/completion.json")
                         .read_text())
     assert record["forced_answer"] is True
+
+
+def _examples_run(tmp_path, proofs, lean_project="lean"):
+    """A graded run: {item: [(verdict, candidate text), ...]}."""
+    run = tmp_path / "examples"
+    run.mkdir()
+    (run / "config.json").write_text(json.dumps({"generation": {"lean_project": lean_project}}))
+    for item, samples in proofs.items():
+        for i, (verdict, text) in enumerate(samples):
+            d = run / "samples" / item / "no_nl_proof" / f"{i:03d}"
+            d.mkdir(parents=True)
+            (d / "grade.json").write_text(json.dumps({"verdict": verdict}))
+            (d / "candidate.lean").write_text(text)
+    return run
+
+
+def test_load_examples_takes_shortest_passing_proof_in_preference_order(tmp_path):
+    run = _examples_run(tmp_path, {
+        "A": [("pass", "long proof of A"), ("pass", "proof A"), ("compile_fail", "x")],
+        "B": [("compile_fail", "no proof of B")],
+        "C": [("pass", "proof C")],
+    })
+    assert load_examples(run) == {"A": "proof A", "C": "proof C"}
+    assert list(load_examples(run, ["C", "B", "A"])) == ["C", "A"]
+    assert list(load_examples(run, ["C"])) == ["C"]
+
+
+def test_examples_leave_out_the_samples_own_item():
+    examples = {"A": "proof A", "B": "proof B", "C": "proof C"}
+    assert examples_for("A", examples, 1) == ["proof B"]
+    assert examples_for("B", examples, 2) == ["proof A", "proof C"]
+    assert examples_for("D", examples, None) == ["proof A", "proof B", "proof C"]
+
+
+def test_repair_shows_examples_from_other_items_only(tmp_path):
+    src = _graded_source(tmp_path)
+    examples = _examples_run(tmp_path, {"SM_01_009_001": [("pass", "OWN ITEM PROOF")],
+                                        "OTHER": [("pass", "OTHER ITEM PROOF")]})
+    rcfg = RepairConfig(rounds=1, examples_from=str(examples), num_examples=3)
+    _run_both(src, tmp_path / "rep", rcfg, Model())
+    d = tmp_path / "rep/samples/SM_01_009_001/no_nl_proof/000"
+    feedback = (d / "attempts/0/feedback.txt").read_text()
+    assert "OTHER ITEM PROOF" in feedback and "OWN ITEM PROOF" not in feedback
+    assert feedback.rstrip().endswith("No commentary outside the code block.")
+    stored = json.loads((tmp_path / "rep/config.json").read_text())["repair"]
+    assert stored["examples_from"] == str(examples)
+
+
+def test_repair_refuses_examples_from_another_pin(tmp_path):
+    src = _graded_source(tmp_path)
+    examples = _examples_run(tmp_path, {"OTHER": [("pass", "proof")]}, lean_project="lean-v4.9")
+    with pytest.raises(ValueError, match="pin"):
+        repair_run(source_dir=src, run_dir=tmp_path / "rep",
+                   rcfg=RepairConfig(rounds=1, examples_from=str(examples)), follow=False,
+                   chat_fn=Model(), continue_fn=Continuation(), log=lambda s: None)
+
+
+def test_repair_run_without_examples_resumes_from_older_settings(tmp_path):
+    src = _graded_source(tmp_path)
+    dst = tmp_path / "rep"
+    repair_run(source_dir=src, run_dir=dst, rcfg=RepairConfig(rounds=1), follow=False,
+               chat_fn=Model(), continue_fn=Continuation(), log=lambda s: None)
+    config = json.loads((dst / "config.json").read_text())
+    assert not any("example" in key for key in config["repair"])
+    repair_run(source_dir=src, run_dir=dst, rcfg=RepairConfig(rounds=1), follow=False,
+               chat_fn=Model(), continue_fn=Continuation(), log=lambda s: None)
 
 
 def test_repair_refuses_changed_settings(tmp_path):
