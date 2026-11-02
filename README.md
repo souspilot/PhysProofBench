@@ -191,6 +191,11 @@ A sample stops at its first pass. Earlier attempts are kept in
 `summary.md` adds pass@k within ≤0, ≤1, … repair rounds, reported
 separately from one-shot pass@k.
 
+`--examples-from <graded run>` adds up to `--num-examples` verified proofs to
+the feedback as worked examples, taken from that run's passing samples on the
+same pin. `--example-items` picks and orders the items. A sample never sees a
+proof of its own item.
+
 **Thinking-budget curves.** `physproofbench budget-curve --from runs/R
 --budgets 4096,8192,16384` evaluates the same traces at several thinking
 budgets, one derived run per budget (`runs/R@think<B>`). Grade each with

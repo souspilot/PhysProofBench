@@ -542,8 +542,17 @@ def extend(source_dir, run_dir, max_tokens, answer_reserve, concurrency, items, 
               help="Only sample indices < k (e.g. 1 for a cheap first look).")
 @click.option("--request-timeout", type=float, default=0.0, show_default=True,
               help="Client-side seconds per request; 0 = none.")
+@click.option("--examples-from", type=click.Path(exists=True, path_type=Path), default=None,
+              help="A graded run whose passing proofs are shown as worked examples in the "
+              "feedback (never a sample's own item).")
+@click.option("--example-items", default=None,
+              help="Comma-separated items to take examples from, in order of preference "
+              "(default: every item with a passing proof).")
+@click.option("--num-examples", type=int, default=3, show_default=True,
+              help="Worked examples per feedback message, with --examples-from.")
 def repair(source_dir, run_dir, rounds, max_tokens, answer_tokens, concurrency, follow,
-           poll_interval, items, samples, request_timeout):
+           poll_interval, items, samples, request_timeout, examples_from, example_items,
+           num_examples):
     """Generation side (GPU node): compiler-feedback repair rounds.
 
     For each sample whose latest attempt failed grading, show the model its
@@ -562,6 +571,10 @@ def repair(source_dir, run_dir, rounds, max_tokens, answer_tokens, concurrency, 
     if not all(c.ok for c in checks):
         raise click.ClickException("preflight failed; nothing sent.")
     rcfg = RepairConfig(rounds=rounds, max_tokens=max_tokens, answer_tokens=answer_tokens)
+    if examples_from:
+        rcfg.examples_from = str(examples_from)
+        rcfg.example_items = _csv(example_items)
+        rcfg.num_examples = num_examples
     try:
         stats = repair_run(
             source_dir=source_dir, run_dir=run_dir, rcfg=rcfg, concurrency=concurrency,
