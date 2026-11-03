@@ -809,12 +809,12 @@ have no single value to check.
 |---|---|---|---|
 | A1 Arc vs chord | 8 | 8 | 8 |
 | A2 Einstein solid | 8 | 8 | 8 |
-| C1 Unicyclist | 1 (5 fell into the trap) | 8 | 8 |
+| C1 Unicyclist | 1 (5 gave the trap value) | 8 | 8 |
 | C2 Joule expansion | 8 | 8 | 8 |
-| D1 Piston | 4 (4 fell into the trap) | 8 | 8 |
-| D2 Ring of minima | 6 (2 fell into the trap) | 8 | 8 |
+| D1 Piston | 4 (4 gave the trap value) | 8 | 8 |
+| D2 Ring of minima | 6 (2 gave the trap value) | 8 | 8 |
 | E1 Tidal disruption | 8 | 8 | 8 |
-| E2 White dwarf | 5 (2 fell into the trap) | 8 | 8 |
+| E2 White dwarf | 5 (2 gave the trap value) | 8 | 8 |
 | **Total of 64** | **48** | **64** | **64** |
 
 **Lean proofs.** Haiku, with no answer in the prompt, first got one attempt, 4 per
@@ -824,7 +824,7 @@ problem. Each failed attempt then went back with Lean's error messages, for up t
 | Problem | One attempt (of 4) | After feedback (of 4) |
 |---|---|---|
 | A1 Arc vs chord | 0 | 4 |
-| A2 Einstein solid | 0 | 1, with 3 unfinished |
+| A2 Einstein solid | 0 | 1, with 3 stopped early |
 | B1 Carnot-like cycle | 4 | 4 |
 | B2 Electromagnet | 4 | 4 |
 | C1 Unicyclist | 3 | 4 |
@@ -839,13 +839,19 @@ Qwen passed 0 of its 74 completed one-attempt samples, on prompts that showed th
 comments. With feedback, it passes 4 of the 20 samples tested, which had all failed
 before, and adding worked examples also gives 4 of 20. 6 of those 8 passes are on C2.
 
-Four patterns stand out:
+A trap value doesn't always mean falling for the trap. One E2 answer we read had the
+right physics, then an algebra slip that happened to give the trap's value.
 
-- **The traps are real, but only catch short reasoning.** Without its thinking
-  phase, Qwen often used $\gamma = 5/3$ on the piston and $c = 1/2$ on the
+Five patterns stand out:
+
+- **The traps are real, but they only caught Qwen without its thinking phase.** It
+  often used $\gamma = 5/3$ on the piston and $c = 1/2$ on the
   unicyclist. With thinking, Qwen got everything right, and so did Haiku.
 - **What separates the models is Lean.** Qwen gets the physics right when it
   can think, but its one-shot proofs don't compile.
+- **Feedback fixed Lean, not physics.** Haiku named the correct value in its first
+  attempt in 29 of 32 samples on these problems, even when the proof didn't compile.
+  The other 3 gave no answer.
 - **Difficulty follows the formal mathematics.** The arc-vs-chord problem, the
   easiest physics in the set, was never proved in one shot, because it needs
   delicate Taylor estimates in Lean. With feedback, Haiku proved it every time.
@@ -853,9 +859,10 @@ Four patterns stand out:
   correct value, but that value can sometimes be worked out from the Lean
   statement by mathematics alone.
 
-The lesson for the next 40 problems: the physical decisions in these ten are
-within reach of current models when they can reason, so to measure physical
-judgment we need harder or less familiar decisions.
+The lesson for the next 40 problems: as posed, these ten are within reach of
+current models when they can think. The statements also give away part of the
+decision, for example by saying "to leading nontrivial order". To measure physical
+judgment, we need harder decisions and fewer hints.
 
 ---
 

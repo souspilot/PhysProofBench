@@ -82,7 +82,7 @@ Run directories: `runs/phys-qwen-nothink`, `runs/phys-qwen-think`, `runs/phys-ha
 | Item | One-shot | After feedback |
 |---|---|---|
 | PI_A_001 | 0/4 | 4/4 |
-| PI_A_002 | 0/4 | 1/4, 3 unfinished |
+| PI_A_002 | 0/4 | 1/4, 3 stopped early |
 | PI_B_001 | 4/4 | 4/4 |
 | PI_B_002 | 4/4 | 4/4 |
 | PI_C_001 | 3/4 | 4/4 |
@@ -99,8 +99,8 @@ statement. Every item now has a Lean-accepted proof with no answer in the prompt
 On the 8 answer-blank items, Haiku named the correct value in its first attempt in 29
 of 32 samples, including attempts that failed to compile; the other 3 gave no answer.
 This checks the first value line in each file. So the feedback fixed Lean, not physics.
-The 3 unfinished `PI_A_002` samples stopped before using all 3 rounds, so they are
-not failed repairs.
+The 3 `PI_A_002` samples that stopped early did so in round 1, most likely after
+running out of tokens again. They count as not fixed.
 
 ## Compiler-feedback repair
 
@@ -127,12 +127,13 @@ can't be separated at this sample size.
 
 ## What this shows
 
-- With reasoning, both models get these physical decisions right. Qwen's main
+- With thinking, both models get these problems right. Qwen's main
   obstacle on these items is Lean.
-- The traps are real but only catch short reasoning. Only `PI_C_001`, `PI_D_001`,
-  `PI_D_002` and `PI_E_002` caught anything, so the pilot can't yet separate capable
-  models on physics.
-- Compiler feedback rescues most of Haiku's failures (12 of 15). It can also produce
+- Without thinking, Qwen makes real physics mistakes, often giving the trap value.
+  The wrong answers are on only `PI_C_001`, `PI_D_001`, `PI_D_002` and `PI_E_002`, and
+  the pilot can't yet separate capable models on physics.
+- Compiler feedback rescues most of Haiku's failures (12 of 15), and those fixes were
+  to the Lean, since its values were already right in the attempts checked. It can also produce
   valid Qwen proofs, but 6 of Qwen's 8 passes are on one algebra-heavy item. The two
   are not directly comparable: they ran on different samples, and Qwen's prompts
   showed comments.
@@ -156,7 +157,8 @@ times: type mismatch 130, no goals to be solved 86, unsolved goals 79, unknown n
   leading nontrivial order", `PI_C_001` gives the form of the answer, and `PI_D_001`
   says "in terms of `g` and `h` only". 64/64 shows the models can solve these problems
   as posed, not that they would choose the right approximation unprompted.
-- Physics scores check final answers, not the reasoning.
+- Physics scores check final answers. Reasoning was read for only one sample of each
+  wrong answer, and not for the correct answers.
 - Public olympiad problems: memorization can't be ruled out.
 - Physics answers were read by one reader against recorded answers, not blind.
 - A proof shows a statement holds, not that it faithfully captures the problem.
