@@ -200,3 +200,20 @@ uninterpretable, because pipeline and model were never separated. Now:
 - **Canary reference proofs** moved to the public
   `tests/fixtures/reference_proofs/` (they are not benchmark items). A test
   requires one per canary.
+
+## Answers in item comments; measuring physics separately (2026-11-02)
+
+8 of the 10 PI items state the expected answer in a Lean comment, and proof prompts
+include comments, so the first pilot's physics conclusion was unsupported.
+
+- **Physics is measured on its own:** `physproofbench physics-only` asks from the
+  plain-English statement, with no Lean. Answers are read by hand against
+  `expected_answer` and `plug_in_trap`; symbolic answers are not auto-scored.
+- **Prompts can drop comments:** `generate --strip-statement-comments` changes only
+  the prompt. The statement gate ignores comments, so gold files and grading are
+  unchanged. It removes helpful explanations too, so comparisons with commented
+  runs are not purely about the leak.
+- **Item files stay as they are for now,** because grading checks each run against
+  the item's gold file. Removing the answers needs a new set of runs.
+
+Results: `docs/PILOT_02.md`.

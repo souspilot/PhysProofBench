@@ -144,3 +144,4 @@ Reply as JSON: {{"fq": int, "fq_reason": str, "lp": int, "lp_reason": str,
   declarations) or the L0 statement gate. Prompts without Core source are
   textually unchanged. No runs had used v1 with Core source in context, so
   nothing is invalidated.
+- 2026-11-02: `generate --strip-statement-comments` removes all comments from `{gold_statement_lean}`, because item comments can state the expected answer. The template itself is unchanged. New separate prompt `physics-v1` (`physics_only.py`) asks from the plain-English statement, with no Lean.

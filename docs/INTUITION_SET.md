@@ -34,6 +34,17 @@ An item qualifies only if all four hold:
    with expert standing (see Sources). Fresh problems are a last resort and
    need a named expert reviewer.
 
+Two further requirements, from the pilots (`docs/PILOT_01.md`,
+`docs/PILOT_02.md`):
+
+- **No hints in the statement.** The physical decision must not be derivable by
+  reading the hypotheses, and Lean comments must not state the answer or the trap,
+  because proof prompts include comments.
+- **Physics-only screen.** Before formalizing a candidate, run it through
+  `physproofbench physics-only`, and prioritize those that capable models sometimes
+  get wrong even with reasoning. All 8 screened pilot items were solved 8/8 by both
+  models with reasoning, so they can't separate capable models on physics.
+
 Explicitly **excluded**: formula substitution ("find the period of a 2 m
 pendulum"); pure math in physics clothing; approximations that are only
 numerical rounding; problems whose only difficulty is a long computation.
@@ -126,4 +137,5 @@ reason, against the four admission criteria above.
 1. Sign-off on this doc (categories, admission test, sources).
 2. Pilot: **2 items per category (10)**, full review, to calibrate the
    rubric before scaling.
-3. Collect the remaining 40, review in batches of 10.
+3. Screen candidates with the physics-only test, then collect the remaining 40,
+   reviewing in batches of 10.
