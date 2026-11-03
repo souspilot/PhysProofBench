@@ -1,7 +1,7 @@
-# Physics-Intuition Set (draft design, 2026-10-26)
+# Physics-Intuition Set (design, 2026-10-26; updated 2026-11-03)
 
-Status: **proposal, awaiting maintainer sign-off.** Nothing here is
-collected yet. This doc fixes *what we are looking for* before we look.
+Status: **10-item pilot done; the remaining 40 are not collected yet.** Results are in
+`docs/PILOT_01.md` and `docs/PILOT_02.md`. This doc fixes *what we are looking for*.
 
 ## Motivation
 
@@ -33,6 +33,17 @@ An item qualifies only if all four hold:
 4. **Credible source.** The problem and its solution come from a source
    with expert standing (see Sources). Fresh problems are a last resort and
    need a named expert reviewer.
+
+Two further requirements, from the pilots (`docs/PILOT_01.md`,
+`docs/PILOT_02.md`):
+
+- **No hints in the statement.** The physical decision must not be derivable by
+  reading the hypotheses, and Lean comments must not state the answer or the trap,
+  because proof prompts include comments.
+- **Physics-only screen.** Before formalizing a candidate, run it through
+  `physproofbench physics-only`, and prioritize those that capable models sometimes
+  get wrong even with reasoning. All 8 screened pilot items were solved 8/8 by both
+  models with thinking, so they can't separate capable models on physics.
 
 Explicitly **excluded**: formula substitution ("find the period of a 2 m
 pendulum"); pure math in physics clothing; approximations that are only
@@ -123,7 +134,8 @@ reason, against the four admission criteria above.
 
 ## Plan for the first 50
 
-1. Sign-off on this doc (categories, admission test, sources).
-2. Pilot: **2 items per category (10)**, full review, to calibrate the
-   rubric before scaling.
-3. Collect the remaining 40, review in batches of 10.
+1. Sign-off on this doc (categories, admission test, sources): still open.
+2. Pilot: **2 items per category (10)**, AI-reviewed, to calibrate the rubric before
+   scaling. Done; human review is still open.
+3. Screen candidates with the physics-only test, then collect the remaining 40,
+   reviewing in batches of 10.

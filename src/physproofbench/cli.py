@@ -208,7 +208,7 @@ def _generation_options(f):
         click.option("--items", default="all", show_default=True,
                      help="Comma-separated item ids, or 'all'."),
         click.option("--conditions", default="no_nl_proof,with_nl_proof", show_default=True,
-                     help="Comma-separated: no_nl_proof (A1), with_nl_proof (A2)."),
+                     help="Comma-separated: with_nl_proof (A1), no_nl_proof (A2)."),
         click.option("--temperature", type=float, default=0.6, show_default=True),
         click.option("--top-p", type=float, default=0.95, show_default=True),
         click.option("--top-k", type=int, default=20, show_default=True,

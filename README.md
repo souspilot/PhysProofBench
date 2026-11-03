@@ -19,7 +19,8 @@ Full design spec: `plan.md`. Living docs as the project develops:
 (`proof_kind`, drift labels, difficulty bands), `docs/GRADING.md` (the exact
 grading contract), `docs/PROMPTS.md` (frozen, versioned prompt templates),
 `docs/DECISIONS.md` (answers to the plan's open questions), `docs/SCHEMA.md`
-(item format, v2), `docs/INTUITION_SET.md` (the physics-intuition set).
+(item format, v2), `docs/INTUITION_SET.md` (the physics-intuition set),
+`docs/PILOT_01.md` and `docs/PILOT_02.md` (pilot items and results).
 
 ## Repository layout
 

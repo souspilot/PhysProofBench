@@ -13,7 +13,7 @@ from pathlib import Path
 
 TEMPLATE_VERSION = "v2"
 
-_A1 = """\
+_PROOF_PROMPT = """\
 You are given a Lean 4 theorem statement from a physics textbook. Prove it.
 
 Do not modify the statement (the signature, hypotheses, or conclusion). Reply
@@ -39,7 +39,7 @@ answer.
 ```
 """
 
-_A2_NL_PARAGRAPH = """\
+_NL_PROOF_PARAGRAPH = """\
 Here is the textbook's own proof, in natural language, for reference. It may
 use different notation or take a different path than is convenient in Lean;
 you do not have to follow it exactly.
@@ -69,7 +69,7 @@ def render_proof_prompt(
 ) -> str:
     """Render the A1/A2 (`proof` mode) prompt for one item.
 
-    `condition` is `"no_nl_proof"` (A1) or `"with_nl_proof"` (A2, requires
+    `condition` is `"no_nl_proof"` (A2) or `"with_nl_proof"` (A1, requires
     `nl_proof`).
     """
     if condition not in ("no_nl_proof", "with_nl_proof"):
@@ -79,14 +79,14 @@ def render_proof_prompt(
 
     core_note = " + PhysProofBench.Core source, if included below" if core_source else ""
     core_source_block = _CORE_BLOCK.format(core_source=core_source) if core_source else ""
-    prompt = _A1.format(
+    prompt = _PROOF_PROMPT.format(
         gold_statement_lean=gold_statement_lean,
         core_note=core_note,
         core_source_block=core_source_block,
     )
     if condition == "with_nl_proof":
         marker = f"```lean\n{gold_statement_lean}\n```\n"
-        prelude = _A2_NL_PARAGRAPH.format(nl_proof=nl_proof)
+        prelude = _NL_PROOF_PARAGRAPH.format(nl_proof=nl_proof)
         prompt = prompt.replace(marker, prelude + marker, 1)
     return prompt
 

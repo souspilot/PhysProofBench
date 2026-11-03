@@ -1,5 +1,9 @@
 # Physics-Intuition Set: Pilot 1 (10 items, 2026-10-26)
 
+**Correction (2026-11-02):** 8 of these 10 Lean items state the expected answer
+in a comment, and proof prompts included it. See `docs/PILOT_02.md`, which also
+reports the first model results and supersedes the "no proofs" status below.
+
 Design: `docs/INTUITION_SET.md`; item format: `docs/SCHEMA.md`. Items:
 `items/PI_*` (`meta.yaml`, `nl.md`, `review.md`, sometimes `variants.lean`),
 gold statements at `PhysProofBench/Items/PI_*.lean` on both pins. All are
