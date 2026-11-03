@@ -17,10 +17,10 @@ A benchmark of physics theorems from textbooks, formalized in Lean 4, that measu
 
 Each capability is tested in two information conditions: **with** the textbook's natural-language proof, and **without** it (statement only). This gives a 2 × 2 condition matrix, and every item in the benchmark can be run in all four conditions from the same stored data.
 
-| | `no_nl_proof` | `with_nl_proof` |
+| | `with_nl_proof` | `no_nl_proof` |
 |---|---|---|
-| **`proof`** (gold Lean statement given) | A1: pure theorem proving | A2: proof translation |
-| **`autoform`** (no Lean given) | B1: statement + proof from a claim | B2: full autoformalization of a worked proof |
+| **`proof`** (gold Lean statement given) | A1: proof translation | A2: pure theorem proving |
+| **`autoform`** (no Lean given) | B1: full autoformalization of a worked proof | B2: statement + proof from a claim |
 
 The design targets three things existing physics benchmarks do not do together: both task types on the same items; per-item tagging by *proof kind* (exact / approximation / hidden assumption); and a repeatable ingestion pipeline aimed at covering a whole book.
 

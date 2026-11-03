@@ -12,7 +12,7 @@ library-in-context ablation is on), `{candidate_lean}`, `{candidate_nl}`.
 
 ## `proof` mode
 
-### A1 — `no_nl_proof` (v2)
+### A2 — `no_nl_proof` (v2)
 
 ```
 You are given a Lean 4 theorem statement from a physics textbook. Prove it.
@@ -31,9 +31,9 @@ Reply with a single ```lean fenced code block containing the complete file
 (imports through the closed proof). No commentary outside the code block.
 ```
 
-### A2 — `with_nl_proof` (v2)
+### A1 — `with_nl_proof` (v2)
 
-Same as A1, with this paragraph inserted before the statement:
+Same as A2, with this paragraph inserted before the statement:
 
 ```
 Here is the textbook's own proof, in natural language, for reference. It may
@@ -63,7 +63,7 @@ the model sees names like `cwProb` but never their definitions.
 
 ## `autoform` mode
 
-### B1 — `no_nl_proof` (v1)
+### B2 — `no_nl_proof` (v1)
 
 ```
 You are given a natural-language physics claim. Formalize it in Lean 4 —
@@ -78,9 +78,9 @@ signature), and a complete `sorry`-free proof. No commentary outside the code
 block.
 ```
 
-### B2 — `with_nl_proof` (v1)
+### B1 — `with_nl_proof` (v1)
 
-Same as B1, with the textbook proof appended:
+Same as B2, with the textbook proof appended:
 
 ```
 Here is the textbook's own proof of this claim, in natural language:
@@ -145,3 +145,4 @@ Reply as JSON: {{"fq": int, "fq_reason": str, "lp": int, "lp_reason": str,
   textually unchanged. No runs had used v1 with Core source in context, so
   nothing is invalidated.
 - 2026-11-02: `generate --strip-statement-comments` removes all comments from `{gold_statement_lean}`, because item comments can state the expected answer. The template itself is unchanged. New separate prompt `physics-v1` (`physics_only.py`) asks from the plain-English statement, with no Lean.
+- 2026-11-03: condition labels renumbered so A1 is the easiest cell and B2 the hardest: A1/B1 now mean the natural-language proof is given (`with_nl_proof`), and A2/B2 mean it is withheld (`no_nl_proof`). Prompt text and run data are unchanged, because runs store the condition names.

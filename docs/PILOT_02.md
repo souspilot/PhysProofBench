@@ -6,14 +6,15 @@ through OpenRouter (temperature 1.0, top-p 1.0, reasoning effort high).
 
 ## Where this fits in the A1/A2/B1/B2 framework
 
+A1 is the easiest cell and B2 the hardest: A1/B1 give the solution, A2/B2 withhold it.
 For this set, the "textbook proof" is the official olympiad solution. Proof runs are
 all in row A, where the Lean statement is given. Autoformalization (B1, B2) is not
 built. The physics-only test is outside the grid, because it involves no Lean.
 
 | Cell | Runs |
 |---|---|
-| A1, solution withheld | Haiku one-shot and repair with comments removed; Qwen one-shot and repair |
-| A2, solution given | Qwen one-shot and repair |
+| A1, solution given | Qwen one-shot and repair |
+| A2, solution withheld | Haiku one-shot and repair with comments removed; Qwen one-shot and repair |
 
 ## Correction: answers leaked into the first pilot's prompts
 
@@ -50,6 +51,10 @@ temperature.
 | PI_E_002 | 5/8 | 2 | 1 | 8/8 | 8/8 |
 | **Total** | **48/64** | **13** | **3** | **64/64** | **64/64** |
 
+Qwen's wrong answers without thinking: `PI_C_001` c = 1/2 (5, the trap), 1/3 and 1/6;
+`PI_D_001` ω = √(5g/3h) (4, the trap); `PI_D_002` √(3k/m) (2, the radial oscillation
+frequency); `PI_E_002` n = 1/3 (2, the trap) and −1/6.
+
 Tokens per answer: Qwen without thinking 711–8,497, Qwen with thinking
 778–42,213, Haiku 802–5,676. No thinking-run answer was forced. "No thinking" means
 the chat-template switch was off; the model still writes out visible reasoning.
@@ -84,8 +89,13 @@ not failed repairs.
 
 ## Compiler-feedback repair
 
-Each failed proof is returned with Lean's errors and goal states, for up to 3
-rounds. Items for Qwen: `PI_B_001`, `PI_B_002`, `PI_C_002`, `PI_D_001`, `PI_E_002`;
+Each failed proof gets a new message with up to 12 of Lean's errors (line, column,
+and what is still to prove at that point), the whole file with line numbers, and an
+instruction to fix it and return the complete file. The model also sees the original
+prompt and its last answer, but not its earlier thinking or older attempts. Up to 3
+rounds. Qwen and Haiku get the same feedback text. Qwen had 32,768 tokens per round
+and Haiku 128,000, and which errors get fixed has not been measured.
+ Items for Qwen: `PI_B_001`, `PI_B_002`, `PI_C_002`, `PI_D_001`, `PI_E_002`;
 both conditions; 2 samples each, so 20 samples per setup. All 20 had failed in the
 original runs. These repairs start from the original runs, so `PI_C_002`, `PI_D_001`
 and `PI_E_002` had the leak; `PI_B_001` and `PI_B_002` did not.
@@ -112,10 +122,27 @@ can't be separated at this sample size.
   are not directly comparable: they ran on different samples, and Qwen's prompts
   showed comments.
 
+## Why Qwen's one-attempt proofs fail
+
+Counts come from a text search of Lean's messages, so one slip can be counted several
+times: type mismatch 130, no goals to be solved 86, unsolved goals 79, unknown name
+59, unexpected token 14. Real examples:
+
+| Error | Item | Code | What went wrong |
+|---|---|---|---|
+| Type mismatch | PI_D_001 | `mul_ne_zero (by norm_num) hnr` for `(9 / 2) * n * R ≠ 0` | Lean groups this as `((9/2) * n) * R`, so it needs `R ≠ 0`, not `n * R ≠ 0` |
+| No goals | PI_C_002 | `ring` after `field_simp [hV0, h2V0]` | `field_simp` had already finished the step |
+| Unsolved goals | PI_C_002 | `have h_mul : ... := by` | The equation is claimed, but its steps do not finish showing it |
+| Unknown name | PI_A_001 | `rw [IsLittleO_iff_tendsto]` | The lemma is `Asymptotics.isLittleO_iff_tendsto` |
+
 ## Limits
 
+- **Main limit: statements can make the decision for the model.** `PI_A_001` says "to
+  leading nontrivial order", `PI_C_001` gives the form of the answer, and `PI_D_001`
+  says "in terms of `g` and `h` only". 64/64 shows the models can solve these problems
+  as posed, not that they would choose the right approximation unprompted.
+- Physics scores check final answers, not the reasoning.
 - Public olympiad problems: memorization can't be ruled out.
-- Some statements give the form of the answer.
 - Physics answers were read by one reader against recorded answers, not blind.
 - A proof shows a statement holds, not that it faithfully captures the problem.
 - A passing proof of an answer-blank item names a correct value, but the value can
@@ -137,3 +164,5 @@ can't be separated at this sample size.
 1. Screen candidates with the physics-only test before formalizing them.
 2. Remove answers from item comments, and check this in review.
 3. Report physics score, one-shot proof rate and assisted proof rate separately.
+4. Test judgment directly: alter known problems so a remembered answer is wrong, remove
+   hints and the answer's form, and ask whether an approximation holds.

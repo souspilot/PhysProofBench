@@ -198,7 +198,7 @@ def test_report_from_stored_results(tmp_path, monkeypatch):
     config = GenerationConfig(model="m")
     plan = _plan(config, samples=2)
     _run(tmp_path, config, plan, FakeModel())
-    # Grade by hand: one pass for the seed's A1 cell, gate_fail elsewhere.
+    # Grade by hand: one pass for the seed's no_nl_proof cell, gate_fail elsewhere.
     for task in plan.tasks:
         d = task.dir(tmp_path)
         sha = json.loads((d / "completion.json").read_text())["candidate_sha"]
