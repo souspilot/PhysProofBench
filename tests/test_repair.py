@@ -75,7 +75,10 @@ class Model:
             return Completion(text="```lean\nwrong\n```", model="m", finish_reason="stop")
         if self.think_too_long:
             return Completion(text="", model="m", finish_reason="length", reasoning="hmm")
-        body = "still wrong" if self.never_fix else "fixed"
+        # Each failed attempt differs, like a real model's: identical candidates
+        # would hide a grader that only grades a sample once.
+        with self.lock:
+            body = f"still wrong {len(self.calls)}" if self.never_fix else "fixed"
         return Completion(text=f"```lean\n{body}\n```", model="m", finish_reason="stop",
                           reasoning="I see the error")
 
@@ -163,6 +166,11 @@ def test_repair_stops_after_rounds(tmp_path):
     assert json.loads((d / "completion.json").read_text())["repair_round"] == 2
     assert sorted(p.name for p in (d / "attempts").iterdir()) == ["0", "1"]
     assert out["repair"].states == {"exhausted": 1}
+    assert out["grade"].graded == 2  # a following grader grades every round's new candidate
+    archived = (d / "attempts/1/grade.json").read_text()
+    assert json.loads(archived)["verdict"] == "compile_fail"
+    assert json.loads((d / "grade.json").read_text())["candidate_sha"] == json.loads(
+        (d / "completion.json").read_text())["candidate_sha"]
 
 
 def test_repair_forces_an_answer_when_a_round_runs_out(tmp_path):

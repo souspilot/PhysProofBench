@@ -573,7 +573,13 @@ def grade_run(
                 + f" | {stats.graded} graded, {stats.passed} pass, {mins:.1f} min")
 
     in_flight: dict[SampleTask, Future] = {}
-    attempted: set[SampleTask] = set()
+    # Per candidate, not per sample: a repair round writes a new candidate to
+    # grade, while a failed grade of the same candidate isn't retried here.
+    attempted: set[tuple[SampleTask, str | None]] = set()
+
+    def attempt_key(t: SampleTask) -> tuple[SampleTask, str | None]:
+        return t, (_read_json(t.dir(run_dir) / "completion.json") or {}).get("candidate_sha")
+
     announced = False
     try:
         with ThreadPoolExecutor(max_workers=max(1, grade_workers)) as pool:
@@ -582,7 +588,8 @@ def grade_run(
                 check_items({t.item_id for t in tasks}, gold_shas)
                 ready = [
                     t for t in tasks
-                    if t.item_id in metas and t not in attempted
+                    if t.item_id in metas and t not in in_flight
+                    and attempt_key(t) not in attempted
                     and (t.dir(run_dir) / "completion.json").exists()
                     and not _grade_is_current(t.dir(run_dir), regrade_timeouts)
                 ]
@@ -593,7 +600,7 @@ def grade_run(
                         + (" (following generation)" if follow else ""))
                     announced = True
                 for t in ready:
-                    attempted.add(t)
+                    attempted.add(attempt_key(t))
                     in_flight[t] = pool.submit(do_grade, t)
                 if not in_flight:
                     if follow and generation_state(run_dir) == GENERATING:
