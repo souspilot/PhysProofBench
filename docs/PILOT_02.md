@@ -51,9 +51,21 @@ temperature.
 | PI_E_002 | 5/8 | 2 | 1 | 8/8 | 8/8 |
 | **Total** | **48/64** | **13** | **3** | **64/64** | **64/64** |
 
-Qwen's wrong answers without thinking: `PI_C_001` c = 1/2 (5, the trap), 1/3 and 1/6;
-`PI_D_001` ω = √(5g/3h) (4, the trap); `PI_D_002` √(3k/m) (2, the radial oscillation
-frequency); `PI_E_002` n = 1/3 (2, the trap) and −1/6.
+All 16 wrong answers are Qwen without thinking. One sample of each wrong answer was
+read, so others with the same answer may have gone wrong differently:
+
+| Item | Answer | Times | What went wrong in the sample read |
+|---|---|---|---|
+| PI_C_001 | c = 1/2 | 5 | Physics: all centrifugal force placed at the centre of mass |
+| PI_C_001 | c = 1/3 | 1 | Sign error: `R_cm + (h/6) sin θ`, should be minus |
+| PI_C_001 | c = 1/6 | 1 | Wrong correction term: `R/2 - (h/12) sin θ`, should be `R/2 - (h/3) sin θ` |
+| PI_D_001 | ω = √(5g/3h) | 4 | Physics: γ = 5/3 for the gas alone, piston's heat capacity ignored |
+| PI_D_002 | √(3k/m) | 2 | Physics: radial oscillation frequency, not orbital |
+| PI_E_002 | n = -1/6 | 1 | Physics: gravitational pressure ∝ GM²/R³, which has the wrong dimensions |
+| PI_E_002 | n = 1/3 | 2 | Algebra: right pressures, then `R ∝ M^(2-5/3)`, should be `M^(5/3-2)` |
+
+The "Trap" column counts answers matching the trap's value. That doesn't always mean
+falling for the trap, as the `PI_E_002` n = 1/3 sample shows.
 
 Tokens per answer: Qwen without thinking 711–8,497, Qwen with thinking
 778–42,213, Haiku 802–5,676. No thinking-run answer was forced. "No thinking" means
@@ -84,6 +96,9 @@ Run directories: `runs/phys-qwen-nothink`, `runs/phys-qwen-think`, `runs/phys-ha
 The matching run with comments shown scored 24/40, so comments did not visibly
 change the one-shot rate. Removing them also removes helpful explanations of the
 statement. Every item now has a Lean-accepted proof with no answer in the prompt.
+On the 8 answer-blank items, Haiku named the correct value in its first attempt in 29
+of 32 samples, including attempts that failed to compile; the other 3 gave no answer.
+This checks the first value line in each file. So the feedback fixed Lean, not physics.
 The 3 unfinished `PI_A_002` samples stopped before using all 3 rounds, so they are
 not failed repairs.
 
@@ -146,8 +161,7 @@ times: type mismatch 130, no goals to be solved 86, unsolved goals 79, unknown n
 - Physics answers were read by one reader against recorded answers, not blind.
 - A proof shows a statement holds, not that it faithfully captures the problem.
 - A passing proof of an answer-blank item names a correct value, but the value can
-  sometimes be derived from the statement by mathematics alone, and Lean's errors
-  could steer a model away from a wrong value during repair.
+  sometimes be derived from the statement by mathematics alone.
 - One source, and a limited range of physics.
 
 ## Pipeline
