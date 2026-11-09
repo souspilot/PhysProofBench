@@ -97,7 +97,8 @@ def check_endpoint(
         return checks, None
     ids = [m.id for m in models]
     add(Check("endpoint reachable", True, f"serving {ids}"))
-    match = next((m for m in models if m.id == model), None)
+    # Google's OpenAI-compatible endpoint lists ids as `models/<name>`.
+    match = next((m for m in models if m.id.removeprefix("models/") == model), None)
     if match is None:
         add(Check("model served", False, f"{model!r} not in {ids} "
                   "(--model must equal vLLM's --served-model-name)"))
@@ -197,7 +198,7 @@ def check_lean(
     lean_project_dir: Path,
     *,
     memory_cap_bytes: int | None = DEFAULT_MEMORY_CAP_BYTES,
-    compile_timeout: float = 300.0,
+    compile_timeout: float = 1800.0,
 ) -> list[Check]:
     """`check_lean_env`, then grade a trivially correct submission through
     the real pipeline. `compile_timeout` should be the run's own; the control

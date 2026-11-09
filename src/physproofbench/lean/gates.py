@@ -108,6 +108,46 @@ def _statement_prefix(text: str) -> str | None:
     return canon[:idx].strip()
 
 
+_HELPER_START = re.compile(r"^\s*(?:(?:private|protected)\s+)?(?:theorem|lemma)\s+([^\s:({\[]+)")
+_COMMAND_START = re.compile(
+    r"^\s*(?:@\[|#\w|(?:(?:private|protected|noncomputable|partial|unsafe)\s+)*"
+    r"(?:theorem|lemma|def|abbrev|instance|example|structure|class|inductive|opaque|axiom"
+    r"|notation|infix[lr]?|prefix|postfix|macro|macro_rules|syntax|elab|attribute|open|export"
+    r"|namespace|section|end|universe|variable|set_option|local|scoped|import)\b)"
+)
+# A proof can end and a new command begin on the same or an indented line, so
+# a helper containing any of these could change what the statement means.
+_NOT_IN_HELPER = re.compile(
+    r"(?<![\w.'])(?:def|abbrev|instance|structure|class|inductive|opaque|notation|infix[lr]?"
+    r"|prefix|postfix|macro|macro_rules|syntax|elab|attribute|open|export|namespace|section"
+    r"|end|universe|variable|set_option|local|scoped|deriving|initialize|run_cmd|run_elab"
+    r"|run_meta)(?![\w.'])"
+    r"|@\["
+)
+
+
+def _without_helper_lemmas(text: str, gold_text: str) -> str:
+    """`text` minus any `lemma`/`theorem` the gold doesn't declare. A helper
+    only adds a proved fact, so it can't change what the statement means.
+    Returns `text` unchanged if a helper contains anything else that could."""
+    gold_names = {m.group(1) for line in strip_lean_comments(gold_text).splitlines()
+                  if (m := _HELPER_START.match(line))}
+    stripped = _MAX_HEARTBEATS_LINE.sub(" ", strip_lean_comments(text))
+    kept: list[str] = []
+    in_helper = False
+    for line in stripped.splitlines():
+        start = _HELPER_START.match(line)
+        if start and start.group(1) not in gold_names:
+            in_helper = True
+        elif not in_helper or _COMMAND_START.match(line):
+            in_helper = False
+            kept.append(line)
+            continue
+        if _NOT_IN_HELPER.search(line):
+            return text
+    return "\n".join(kept)
+
+
 _IMPORT_LINE = re.compile(r"^\s*import\s+\S+\s*$")
 _OPEN_LINE = re.compile(r"^\s*open\s+\S.*$")
 _DECL_START = ("/--", "theorem ", "lemma ")
@@ -147,7 +187,7 @@ def restore_item_preamble(submission_text: str, gold_text: str) -> tuple[str, bo
     lines = submission_text.splitlines()
     sub_imports = [l.strip() for l in lines if _IMPORT_LINE.match(l)]
     body = [l for l in lines if not _IMPORT_LINE.match(l)]
-    sub_opens = {l.strip() for l in _head(body) if _OPEN_LINE.match(l)}
+    sub_opens = {l.strip() for l in body if _OPEN_LINE.match(l)}
     missing_imports = [i for i in gold_imports if i not in sub_imports]
     missing_opens = [o for o in gold_opens if o not in sub_opens]
     if not missing_imports and not missing_opens:
@@ -203,6 +243,8 @@ def check_gates(
                 f"gold_text has no '{_STATEMENT_MARKER}' marker; cannot check "
                 "for statement tampering"
             )
+        if sub_prefix != gold_prefix:
+            sub_prefix = _statement_prefix(_without_helper_lemmas(submission_text, gold_text))
         if sub_prefix is None or sub_prefix != gold_prefix:
             failures.append("gate: statement_edited")
 

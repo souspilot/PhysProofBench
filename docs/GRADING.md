@@ -1,10 +1,11 @@
 # Grading contract
 
 This is the authoritative spec for how a submission is scored. Current
-`grading_version`: **4** (`grading.GRADING_VERSION`). v2: the
+`grading_version`: **5** (`grading.GRADING_VERSION`). v2: the
 decl-specific, last-message axiom parse below. v3: the statement diff also
 ignores `import Aesop` and `set_option maxHeartbeats N` lines. v4: the item's
-own setup lines are restored before grading; see L0. The code in
+own setup lines are restored before grading; see L0. v5: helper lemmas before
+the theorem are allowed, and the default compile limit is 1800s. The code in
 `src/physproofbench/lean/` implements it; if code and doc disagree, this doc
 wins and the code has a bug. Bumping `grading_version` (in `runs/<id>/`
 metadata) is required whenever this contract changes in a way that could move
@@ -43,9 +44,11 @@ Reject the submission before compiling if it contains, as raw text:
   every model), and `set_option maxHeartbeats N` (alone or as `… in`), which
   only changes the elaboration budget while the wall-clock timeout still
   applies. Specialist provers' training header has both,
-  but nothing else: any other added `import`, an added `open`, or a `def`
-  before the theorem still counts as an edit, since it could change what the
-  statement means. (Models routinely drop or
+  but nothing else. Added `lemma` or `theorem` declarations are also ignored,
+  because a proved helper can't change what the statement means. Any other
+  added `import`, an added `open`, a `def`, or a helper containing a command
+  such as `notation`, `instance` or `open` still counts as an edit, since it
+  could. (Models routinely drop or
   rewrite the item's tag comments and docstring; a comment-sensitive diff
   rejected otherwise-valid answers. Found on a real Qwen3 run.) This is a *belt*
   check; the *braces* check is the independent L2.4 implication check below —
@@ -58,9 +61,7 @@ its declaration proves the gold type (`audit.build_same_file_gold_check`).
 The result goes in `grade.json` as `statement_edit_diagnostic.would_pass`,
 and `summary.md` counts these as "edited-but-correct". The verdict stays
 `gate_fail`. The diagnostic measures how often the text gate rejects proofs
-that are correct apart from, e.g., a helper lemma placed before the theorem.
-That number decides whether to make L2.3 the statement check and relax the
-text diff.
+that Lean accepts as proving the gold type.
 
 Each gate failure is recorded with a machine-readable reason
 (`gate: sorry_present`, `gate: axiom_declared`, `gate: forbidden_tactic:
@@ -73,7 +74,7 @@ malformed submissions from ordinary incapacity to prove the theorem.
 Compile the submission against the pinned Mathlib build (currently `v4.34.0`,
 see `docs/SOURCE.md` / `lean/lakefile.toml`), in a sandbox with:
 
-- a wall-clock timeout (default 300s, overridable per item in `meta.yaml`)
+- a wall-clock timeout (default 1800s, overridable per item in `meta.yaml`)
 - a memory cap
 - no network access (models occasionally emit `import`s of nonexistent
   packages, or attempt to shell out)

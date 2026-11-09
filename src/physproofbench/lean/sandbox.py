@@ -24,7 +24,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_TIMEOUT_S = 300.0
+DEFAULT_TIMEOUT_S = 1800.0
 DEFAULT_MEMORY_CAP_BYTES = 32 * 1024 * 1024 * 1024  # 32 GiB virtual; see _memory_cap_wrapper
 
 # elan's default install location. `lake` may not be on PATH even when

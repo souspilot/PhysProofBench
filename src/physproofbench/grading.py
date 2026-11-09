@@ -29,7 +29,7 @@ Verdict = Literal["pass", "gate_fail", "compile_fail", "audit_fail"]
 # Bump whenever a change to grading could change a verdict (docs/GRADING.md).
 # The batch runner re-grades stored samples whose grade was produced under a
 # different version.
-GRADING_VERSION = "4"
+GRADING_VERSION = "5"
 
 # Compiler output kept in grade records; full logs of failing compiles can be
 # megabytes of elaboration traces, and the first errors are what matters.
@@ -77,7 +77,7 @@ def grade_submission(
     gold_path: Path | None,
     decl_name: str,
     mode: str = "proof",
-    timeout: float = 300.0,
+    timeout: float = 1800.0,
     memory_cap_bytes: int | None = DEFAULT_MEMORY_CAP_BYTES,
     diagnose_statement_edits: bool = False,
 ) -> GradeReport:

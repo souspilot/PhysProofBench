@@ -29,7 +29,7 @@ def main() -> None:
 @click.option(
     "--lean-project", required=True, type=click.Path(exists=True, path_type=Path)
 )
-@click.option("--timeout", type=float, default=300.0, show_default=True)
+@click.option("--timeout", type=float, default=1800.0, show_default=True)
 def grade(
     submission: Path,
     gold: Path | None,
@@ -224,7 +224,8 @@ def _generation_options(f):
                      help="chat_template_kwargs.enable_thinking. Default: server default."),
         click.option("--reasoning-effort", default=None,
                      type=click.Choice(["minimal", "low", "medium", "high", "xhigh"]),
-                     help="OpenRouter's reasoning.effort. Default: provider default "
+                     help="OpenRouter's reasoning.effort, or Gemini's thinking level. "
+                     "Default: provider default "
                      "(for some models, no reasoning at all)."),
         click.option("--core-in-context/--no-core-in-context", default=True,
                      show_default=True,
@@ -714,7 +715,7 @@ def _grading_options(f):
                      default=None,
                      help="Lean project (Mathlib pin) to grade with. Default: the run's own "
                      "pin (grade-run), or `lean` (lean-check)."),
-        click.option("--compile-timeout", type=float, default=300.0, show_default=True),
+        click.option("--compile-timeout", type=float, default=1800.0, show_default=True),
         click.option("--memory-cap-gb", type=float, default=32.0, show_default=True,
                      help="Virtual-memory cap per Lean compile (Linux only); 0 = none."),
     ]

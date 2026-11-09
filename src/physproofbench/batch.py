@@ -492,7 +492,7 @@ def grade_run(
     items_dir: Path,
     lean_project_dir: Path,
     grade_workers: int = 2,
-    compile_timeout: float = 300.0,
+    compile_timeout: float = 1800.0,
     memory_cap_bytes: int | None = DEFAULT_MEMORY_CAP_BYTES,
     diagnose_statement_edits: bool = True,
     regrade_timeouts: bool = False,

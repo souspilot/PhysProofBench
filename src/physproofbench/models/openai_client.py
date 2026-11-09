@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 from openai import OpenAI
 
@@ -52,6 +53,10 @@ def get_client(timeout: float | None = 3600.0) -> OpenAI:
     return OpenAI(api_key=api_key, base_url=base_url, timeout=timeout, max_retries=0)
 
 
+def _is_google_endpoint(client: OpenAI) -> bool:
+    return (urlparse(str(client.base_url)).hostname or "").endswith("googleapis.com")
+
+
 def complete(
     prompt: str,
     *,
@@ -81,7 +86,8 @@ def complete(
     `None` leaves the server/model default alone. `top_k` is likewise a vLLM
     extension (sent in `extra_body`); `top_p` and `seed` are standard.
     `reasoning_effort` ("low", "medium", "high", ...) is sent as
-    OpenRouter's unified `reasoning: {effort}`; `None` sends nothing.
+    OpenRouter's unified `reasoning: {effort}`, or as the standard top-level
+    field on Google's OpenAI-compatible endpoint; `None` sends nothing.
 
     Pass a shared `client` when calling from many threads (the SDK client is
     thread-safe); otherwise one is built per call with `timeout`."""
@@ -94,16 +100,20 @@ def complete(
     extra_body: dict = {}
     if enable_thinking is not None:
         extra_body["chat_template_kwargs"] = {"enable_thinking": enable_thinking}
+    request: dict = {}
     if reasoning_effort is not None:
-        extra_body["reasoning"] = {"effort": reasoning_effort}
+        if _is_google_endpoint(client):
+            request["reasoning_effort"] = reasoning_effort
+        else:
+            extra_body["reasoning"] = {"effort": reasoning_effort}
     if top_k is not None:
         extra_body["top_k"] = top_k
-    request: dict = {}
     if max_tokens is not None and max_tokens > 0:
         request["max_tokens"] = max_tokens
     if top_p is not None:
         request["top_p"] = top_p
-    if seed is not None:
+    # Google's endpoint rejects `seed` with a 400.
+    if seed is not None and not _is_google_endpoint(client):
         request["seed"] = seed
     start = time.monotonic()
     resp = client.chat.completions.create(

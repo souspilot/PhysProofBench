@@ -181,3 +181,59 @@ def test_restore_does_not_hide_real_edits():
     foreign = PROVER_STYLE.replace("import Aesop", "import Foo")
     restored, _ = restore_item_preamble(foreign, ITEM_GOLD)
     assert not check_gates(restored, mode="proof", gold_text=ITEM_GOLD).passed
+
+
+HELPER_GOLD = """import Mathlib
+
+namespace X
+
+noncomputable def f (x : ℝ) : ℝ := x
+
+end X
+
+open X
+
+theorem main (x : ℝ) : f x = x := by
+  sorry
+"""
+_HELPER = "lemma aux (x : ℝ) : X.f x = x := by\n  rfl\n\n"
+_MAIN = "theorem main (x : ℝ) : f x = x := by\n  exact aux x\n"
+_HEAD = "import Mathlib\n\nnamespace X\n\nnoncomputable def f (x : ℝ) : ℝ := x\n\n"
+_TAIL = "end X\n\nopen X\n\n"
+
+
+def _helper_gates(text):
+    return check_gates(text, mode="proof", gold_text=HELPER_GOLD)
+
+
+def test_helper_lemmas_are_accepted_anywhere_before_the_theorem():
+    assert _helper_gates(_HEAD + _TAIL + _HELPER + _MAIN).passed
+    assert _helper_gates(_HEAD + _HELPER + _TAIL + _MAIN).passed
+    assert _helper_gates(_HEAD + _TAIL + "private " + _HELPER + _MAIN).passed
+    assert _helper_gates(_HEAD + _TAIL + "theorem aux2 : True :=\n  trivial\n\n" + _MAIN).passed
+
+
+def test_helper_does_not_excuse_a_changed_theorem_or_definition():
+    changed = "theorem main (x : ℝ) : f x = 2 * x := by\n  exact aux x\n"
+    assert "gate: statement_edited" in _helper_gates(_HEAD + _TAIL + _HELPER + changed).failures
+    other_def = _HEAD.replace(":= x", ":= 0")
+    assert "gate: statement_edited" in _helper_gates(other_def + _TAIL + _HELPER + _MAIN).failures
+
+
+def test_other_additions_beside_a_helper_still_count_as_edits():
+    for extra in ("def g : ℕ := 0\n\n", 'notation "f" => id\n\n', "open Real\n\n",
+                  "instance : Inhabited ℝ := ⟨0⟩\n\n", "@[simp] " + _HELPER):
+        r = _helper_gates(_HEAD + _TAIL + _HELPER + extra + _MAIN)
+        assert "gate: statement_edited" in r.failures, extra
+
+
+def test_command_hidden_inside_a_helper_counts_as_an_edit():
+    for hidden in ('  notation "f" => id\n', "  open Real\n", "  rfl notation \"f\" => id\n"):
+        r = _helper_gates(_HEAD + _TAIL + _HELPER.rstrip("\n") + "\n" + hidden + "\n" + _MAIN)
+        assert "gate: statement_edited" in r.failures, hidden
+
+
+def test_item_open_after_a_helper_is_not_restored_again():
+    text = _HEAD + _HELPER + _TAIL + _MAIN
+    assert restore_item_preamble(text, HELPER_GOLD) == (text, False)
+
