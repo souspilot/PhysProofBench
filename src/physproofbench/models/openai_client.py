@@ -54,7 +54,7 @@ def get_client(timeout: float | None = 3600.0) -> OpenAI:
 
 
 def _is_google_endpoint(client: OpenAI) -> bool:
-    return (urlparse(str(client.base_url)).hostname or "").endswith("googleapis.com")
+    return (urlparse(str(getattr(client, "base_url", ""))).hostname or "").endswith("googleapis.com")
 
 
 def complete(
